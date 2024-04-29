@@ -1,0 +1,40 @@
+data_procedure: CABG
+allphase:
+    iabpwhen: iabpwhen #iabp iniated during preop, intraop, postop
+    ecmowhen: ecmowhen #ecmo during preop, intraop, postop
+
+
+# CABG DATA
+cohort_data_path: /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Cohort_20211214.csv
+
+med_data_path: /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Medication_20211214.csv
+
+surg_param_data_path: [/zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2011_20211214.csv, 
+                      /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2012_20211214.csv, 
+                     /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2013_20211214.csv, 
+                       /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2014_20211214.csv, 
+                       /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2015_20211214.csv, 
+                       /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2016_20211214.csv, 
+                       /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2017_20211214.csv, 
+                       /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2018_20211214.csv, 
+                       /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2019_20211214.csv, 
+                        /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2020_20211214.csv, 
+                        /zfsauton/project/upmc_intraop/00513_Isolated_CABG_20211214/00513_Isolated_CABG_Surgical_Pameters_2021_20211214.csv
+] 
+
+# AVR Data 
+#cohort_data_path: /zfsauton/project/upmc_intraop/00513_Isolated_AVR_20211214/00513_Isolated_AVR_Cohort_20211214.csv
+
+#med_data_path: /zfsauton/project/upmc_intraop/00513_Isolated_AVR_20211214/00513_Isolated_AVR_Surgical_Medication_20211214.csv
+
+#surg_param_data_path: [/zfsauton/project/upmc_intraop/00513_Isolated_AVR_20211214/00513_Isolated_AVR_Surgical_Parameters_20211214.csv]
+
+# AVR+CABG Data 
+# cohort_data_path: /zfsauton/project/upmc_intraop/00513_AVR_CABG_20211214/00513_AVR_CABG_Cohort_20211214.csv
+
+# med_data_path: /zfsauton/project/upmc_intraop/00513_AVR_CABG_20211214/00513_AVR_CABG_Surgical_Medication_20211214.csv
+
+# surg_param_data_path: [/zfsauton/project/upmc_intraop/00513_AVR_CABG_20211214/00513_AVR_CABG_Surgical_Parameters_20211214.csv]
+
+
+# Features in cohort dataset

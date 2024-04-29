@@ -175,6 +175,9 @@ def fit_CMHE(x, t, e, a):
 
 def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardtrt'):
 
+    # intervention = 'sex'
+    # condition = 'cardtrt'
+
     condition_ = pd.unique(features_raw[condition])
     phenotypes_lst = []
 
@@ -182,6 +185,10 @@ def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardt
     # 1 male, 2 female
     condition_names = {1: 'Male', 2:  'Female'}
     intervention_names = {0: 'Medical Therapy (control)', 1: 'Early Revascularization (treatment)'}
+
+    # condition_names = {0: 'Medical Therapy (control)', 1: 'Early Revascularization (treatment)'}
+    # intervention_names = {1: 'Male', 2:  'Female'}
+
 
     # Identify categorical (cat_feats) and continuous (num_feats) features
     cat_feats = ['sex',
