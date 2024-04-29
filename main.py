@@ -1,5 +1,7 @@
 import os
 import sys
+import copy
+import itertools
 
 import torch
 import numpy as np
@@ -21,7 +23,7 @@ from auton_survival.models.dcm.dcm_utilities import predict_latent_z
 from auton_survival.preprocessing import Preprocessor
 from sklearn.model_selection import train_test_split
 from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
-from examples.cmhe_demo_utils import * 
+from examples.cmhe_demo_utils import *
 
 
 
@@ -46,6 +48,130 @@ def find_max_treatment_effect_phenotype(g, zeta_probs, factual_outcomes):
     return np.nanargmax(mean_differential_survival)
 
 
+def plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a_tr_names, condition):
+
+    f, axs = plt.subplots(len(condition_), len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
+
+    for i, p in enumerate(np.unique(phenotypes)):
+        for j, c in enumerate(condition_):
+            d = outcomes.loc[x_tr.index].loc[phenotypes==p]
+            # d['condition'] = [", ".join([s, i]) for s, i in condition_tr_names.loc[d.index][[condition, intervention]].values]
+
+            # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
+            # plot_kaplanmeier(d, d['condition'], ax=axs[i], plot_counts=True)
+            plot_kaplanmeier(d[features[condition] == c], a_tr_names[features[condition] == c], ax=axs[j][i], plot_counts=False)
+
+            axs[j][i].set_xlabel('Time to Unstable Angina (years)')
+            axs[j][i].set_ylabel('Survival probability')
+            axs[j][i].set_title('Kaplan-Meier curve for ' + condition_names[c] + ' Phenotype '+ str(i+1))
+            axs[j][i].grid(True)
+
+    # f.set_size_inches(14*2, 7*2)
+    plt.savefig('_KM.png')
+    plt.close()
+
+
+    f, axs = plt.subplots(1, len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
+    for i, p in enumerate(np.unique(phenotypes)):
+
+        d = outcomes.loc[x_tr.index].loc[phenotypes==p]
+
+        # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
+        plot_kaplanmeier(d, a_tr_names.loc[d.index], ax=axs[i], plot_counts=False)
+
+        axs[i].set_xlabel('Time to Unstable Angina (years)')
+        axs[i].set_ylabel('Survival probability')
+        axs[i].set_title('Kaplan-Meier curve for Phenotype '+ str(i+1))
+        axs[i].grid(True)
+
+    # f.set_size_inches(14, 7)
+    plt.savefig('_KM_all.png')
+    plt.close()
+
+
+
+
+
+
+def fit_CMHE(x, t, e, a):
+    random_seed = 10
+    torch.manual_seed(random_seed)
+    np.random.seed(random_seed)
+
+    horizons = [1, 3, 5]
+
+    best_IBS = np.inf
+
+    # Hyper-parameters to train model
+    # ks = [1, 2, 3] # number of underlying base survival phenotypes
+    # gs = [1, 2, 3] # number of underlying treatment effect phenotypes.
+    # layerss = [[8, 8], [64, 64], [128, 128]] # number of neurons in each hidden layer.
+    ks = [1] # number of underlying base survival phenotypes
+    gs = [2] # number of underlying treatment effect phenotypes.    
+    layerss = [[50, 50]] # number of neurons in each hidden layer.
+
+    iters = 100 # number of training epochs
+    # learning_rate = 0.001
+    learning_rate = 0.01
+    batch_size = 256
+    vsize = 0.15 # size of the validation split
+    patience = 3
+    optimizer = "Adam"
+
+    # get val data
+    x, t, e, a = x.to_numpy(), t.to_numpy(), e.to_numpy(), a.to_numpy()
+    idx = list(range(x.shape[0]))
+    np.random.shuffle(idx)
+    x_tr, t_tr, e_tr, a_tr = x[idx], t[idx], e[idx], a[idx]
+    vsize_ = int(vsize*x_tr.shape[0])
+    x_vl, t_vl, e_vl, a_vl = x_tr[-vsize_:], t_tr[-vsize_:], e_tr[-vsize_:], a_tr[-vsize_:]
+    x_tr, t_tr, e_tr, a_tr = x_tr[:-vsize_], t_tr[:-vsize_], e_tr[:-vsize_], a_tr[:-vsize_]
+
+
+    # hyperparam search
+    for k, g, layers in itertools.product(ks, gs, layerss):
+        print(k, g, layers)
+        # Instantiate the CMHE model
+        model = DeepCoxMixturesHeterogenousEffects(random_seed=random_seed, k=k, g=g, layers=layers)
+        model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
+                        learning_rate=learning_rate, batch_size=batch_size,
+                        optimizer=optimizer, patience=patience)
+        print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
+
+        # Now let us predict survival using CMHE
+        predictions_test_CMHE = model.predict_survival(x_vl, a_vl, t=horizons)
+        CI1, CI3, CI5, IBS = factual_evaluate((x_tr, t_tr, e_tr, a_tr), (x_vl, t_vl, e_vl, a_vl), 
+                                            horizons, predictions_test_CMHE)
+        print(f'IBS: {IBS}')
+        if best_IBS > IBS:
+            best_IBS = IBS
+            best_params = (k, g, layers)
+
+
+    print(f'Best IBS: {best_IBS}')
+    print(f'Best Params: {best_params}')
+    k, g, layers = best_params
+    model = DeepCoxMixturesHeterogenousEffects(random_seed=random_seed, k=k, g=g, layers=layers)
+    model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
+                    learning_rate=learning_rate, batch_size=batch_size,
+                    optimizer=optimizer, patience=patience)
+    print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
+
+    zeta_probs_train = model.predict_latent_phi(x)
+    zeta_train =  np.argmax(zeta_probs_train, axis=1)
+    print(f'Distribution of individuals in each treatement phenotype in the training data: \
+    {np.unique(zeta_train, return_counts=True)[1]}')
+
+
+    return zeta_train
+
+
+
+
+
+
+
+
 
 def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardtrt'):
 
@@ -59,7 +185,7 @@ def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardt
 
     # Identify categorical (cat_feats) and continuous (num_feats) features
     cat_feats = ['sex',
-        'race', 'hxmi', 'hxhtn',
+                'race', 'hxmi', 'hxhtn',
                 'angcls6w', 'smkcat', 'ablvef', 'geographic_reg'
                 ]
     num_feats = ['age', 'bmi', 'dmdur'
@@ -73,243 +199,48 @@ def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardt
     x = preprocessor.fit_transform(features[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
                                     one_hot=True, fill_value=-1).astype(float)
 
+    # data
     x_tr = x
+    # outcomes
     y_tr = outcomes
     outcomes_tr = y_tr
     t_tr = outcomes['time']
     e_tr = outcomes['event']
-    
-    
+    # intervention
     a_tr = features[intervention]
     interventions_tr = a_tr
     a_tr_names = a_tr.apply(lambda x: intervention_names[x])
-    
-    # a_tr = features[condition]
-    # interventions_tr = a_tr
-    # a_tr_names = a_tr.apply(lambda x: condition_names[x])
-    
-    
-    sex_tr_names = features[condition].apply(lambda x: condition_names[x])
-    condition_tr_names = pd.concat([a_tr_names, sex_tr_names], axis=1)
+    # sex
+    # sex_tr_names = features[condition].apply(lambda x: condition_names[x])
+    # condition_tr_names = pd.concat([a_tr_names, sex_tr_names], axis=1)
 
-    # Hyper-parameters to train model
-    k = 1 # number of underlying base survival phenotypes
-    g = 2 # number of underlying treatment effect phenotypes.
-    layers = [50, 50] # number of neurons in each hidden layer.
+    phenotypes = fit_CMHE(x_tr, t_tr, e_tr, a_tr)
 
-    random_seed = 10
-    iters = 100 # number of training epochs
-    learning_rate = 0.01
-    batch_size = 256
-    vsize = 0.15 # size of the validation split
-    patience = 3
-    optimizer = "Adam"
+    plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a_tr_names, condition)
 
-    torch.manual_seed(random_seed)
-    np.random.seed(random_seed)
 
-    # Instantiate the CMHE model
-    model = DeepCoxMixturesHeterogenousEffects(random_seed=random_seed, k=k, g=g, layers=layers)
-
-    model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=None, iters=iters,
-                    learning_rate=learning_rate, batch_size=batch_size,
-                    optimizer=optimizer, patience=patience)
-
-    print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
-
-    zeta_probs_train = model.predict_latent_phi(x_tr)
-    zeta_train =  np.argmax(zeta_probs_train, axis=1)
-    print(f'Distribution of individuals in each treatement phenotype in the training data: \
-    {np.unique(zeta_train, return_counts=True)[1]}')
-
-    phenotypes = zeta_train
-
-    f, axs = plt.subplots(len(condition_), len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
-
-    for i, p in enumerate(np.unique(phenotypes)):
-        for j, c in enumerate(condition_):
-            d = outcomes.loc[x_tr.index].loc[phenotypes==p]
-            # d['condition'] = [", ".join([s, i]) for s, i in condition_tr_names.loc[d.index][[condition, intervention]].values]
-            
-            # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
-            # plot_kaplanmeier(d, d['condition'], ax=axs[i], plot_counts=True)
-            plot_kaplanmeier(d[features[condition] == c], a_tr_names[features[condition] == c], ax=axs[j][i], plot_counts=False)
-
-            axs[j][i].set_xlabel('Time to Unstable Angina (years)')
-            axs[j][i].set_ylabel('Survival probability')
-            axs[j][i].set_title('Kaplan-Meier curve for ' + condition_names[c] + ' Phenotype '+ str(i+1))
-            axs[j][i].grid(True)
-
-    # f.set_size_inches(14*2, 7*2)
-    plt.savefig('_KM.png')
-    plt.close()
-    
-    
-    f, axs = plt.subplots(1, len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
-    for i, p in enumerate(np.unique(phenotypes)):
-        
-        d = outcomes.loc[x_tr.index].loc[phenotypes==p]
-        
-        # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
-        plot_kaplanmeier(d, a_tr_names.loc[d.index], ax=axs[i], plot_counts=False)
-
-        axs[i].set_xlabel('Time to Unstable Angina (years)')
-        axs[i].set_ylabel('Survival probability')
-        axs[i].set_title('Kaplan-Meier curve for Phenotype '+ str(i+1))
-        axs[i].grid(True)
-
-    # f.set_size_inches(14, 7)
-    plt.savefig('_KM_all.png')
-    plt.close()    
-    
-    
-    
-    
-    column_names = ['Age', 'BMI', 'Duration of Diabetes', 'Non-White', 'History of MI',
-                    'History of Hypertension', 
+    column_names = ['Age', 'BMI', 'Duration of Diabetes', 'Female', 'Non-White', 'History of MI',
+                    'History of Hypertension',
                     'Baseline Stable 3, 4 Angina', 'Baseline Unstable Angina', 'Baseline No Angina',
                     'Former Smoker', 'Current Smoker',
                     'Abnormal LVEF', 'Non-USA']
-    
-    
 
-    for s in condition_:
-        for p in np.unique(phenotypes):
-            with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
-                print(features_raw[phenotypes == p][features_raw[condition] == s][cat_feats+num_feats].describe())
+    for p in np.unique(phenotypes):
+        with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+            print(features_raw[phenotypes == p][cat_feats+num_feats].describe())
 
-        d = pd.get_dummies(features_raw[features_raw[condition] == s][cat_feats+num_feats], columns=cat_feats, drop_first=True)
-                
-        clf = tree.DecisionTreeClassifier()
-        clf = clf.fit(d, phenotypes[features_raw[condition] == s])
-        plt.figure(figsize=(30, 10)) 
-        tree.plot_tree(clf, fontsize=10, max_depth=3, feature_names=column_names, 
-                    class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
-        plt.title('Decision Tree for ' + condition_names[s] + ' Phenotypes')
-        plt.savefig('tree_'+str(s)+'.png')
-        plt.close()
+    d = pd.get_dummies(features_raw[cat_feats+num_feats], columns=cat_feats, drop_first=True)
+
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(d, phenotypes)
+    plt.figure(figsize=(30, 10))
+    tree.plot_tree(clf, fontsize=10, max_depth=4, feature_names=column_names,
+                class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
+    plt.title('Decision Tree for Phenotypes')
+    plt.savefig('tree.png')
+    plt.close()
 
 
-
-    for s in condition_:
-        for p in np.unique(phenotypes):
-            with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
-                print(features_raw[phenotypes == p][features_raw[condition] == s][cat_feats+num_feats].describe())
-
-        d = pd.get_dummies(features_raw[features_raw[condition] == s][cat_feats+num_feats], columns=cat_feats, drop_first=True)
-                
-        clf = tree.DecisionTreeClassifier()
-        clf = clf.fit(d, phenotypes[features_raw[condition] == s])
-        plt.figure(figsize=(25*5, 10*5)) 
-        tree.plot_tree(clf, fontsize=10, feature_names=column_names, 
-                    class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
-        plt.title('Decision Tree for Phenotypes')
-        plt.savefig('example.png')
-        plt.close()
-
-
-
-
-
-    # for c in condition_:
-    #     features = features_raw[features_raw[condition] == c]
-    #     outcomes = outcomes_raw.loc[features.index]
-
-    #     preprocessor = Preprocessor(cat_feat_strat='ignore', num_feat_strat= 'mean')
-    #     x = preprocessor.fit_transform(features[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
-    #                                     one_hot=True, fill_value=-1).astype(float)
-
-    #     x_tr = x
-    #     y_tr = outcomes
-    #     outcomes_tr = y_tr
-    #     t_tr = outcomes['time']
-    #     e_tr = outcomes['event']
-    #     a_tr = features[intervention]
-    #     interventions_tr = a_tr
-    #     a_tr_names = a_tr.apply(lambda x: intervention_names[x])
-
-    #     # Hyper-parameters to train model
-    #     k = 1 # number of underlying base survival phenotypes
-    #     g = 2 # number of underlying treatment effect phenotypes.
-    #     layers = [50, 50] # number of neurons in each hidden layer.
-
-    #     random_seed = 10
-    #     iters = 100 # number of training epochs
-    #     learning_rate = 0.01
-    #     batch_size = 256
-    #     vsize = 0.15 # size of the validation split
-    #     patience = 3
-    #     optimizer = "Adam"
-
-    #     torch.manual_seed(random_seed)
-    #     np.random.seed(random_seed)
-
-    #     # Instantiate the CMHE model
-    #     model = DeepCoxMixturesHeterogenousEffects(random_seed=random_seed, k=k, g=g, layers=layers)
-
-    #     model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=None, iters=iters,
-    #                     learning_rate=learning_rate, batch_size=batch_size,
-    #                     optimizer=optimizer, patience=patience)
-
-    #     print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
-
-    #     zeta_probs_train = model.predict_latent_phi(x_tr)
-    #     zeta_train =  np.argmax(zeta_probs_train, axis=1)
-    #     print(f'Distribution of individuals in each treatement phenotype in the training data: \
-    #     {np.unique(zeta_train, return_counts=True)[1]}')
-
-    #     # max_treat_idx_CMHE = find_max_treatment_effect_phenotype(
-    #     #     g=2, zeta_probs=zeta_probs_train, factual_outcomes=(outcomes_tr, interventions_tr))
-    #     # print(f'\nGroup {max_treat_idx_CMHE} has the maximum restricted mean survival time on the training data!')
-
-
-    #     phenotypes = zeta_train
-
-
-    #     f, axs = plt.subplots(1, len(np.unique(phenotypes)), sharey=True)
-
-    #     for i, p in enumerate(np.unique(phenotypes)):
-            
-    #         d = outcomes.loc[x_tr.index].loc[phenotypes==p]
-    #         # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
-    #         plot_kaplanmeier(d, a_tr_names.loc[d.index], ax=axs[i])
-
-    #         axs[i].set_xlabel('Time to Unstable Angina (years)')
-    #         axs[i].set_ylabel('Survival probability')
-    #         axs[i].set_title('Kaplan-Meier curve for ' + condition_names[c] + ', Phenotype '+ str(i+1))
-    #         axs[i].grid(True)
-
-    #     f.set_size_inches(14, 7)
-    #     plt.savefig('KM_'+str(condition_names[c])+'.png')
-    #     plt.close()
-
-
-
-    #     # Estimate the Integrated Brier Score at event horizons of 1, 2 and 5 years
-    #     metric = phenotype_purity(phenotypes_train=phenotypes, outcomes_train=y_tr,
-    #                                     phenotypes_test=None, outcomes_test=None,
-    #                                     strategy='instantaneous', horizons=[2, 3, 5],
-    #                                     bootstrap=None)
-
-    #     print(f'Phenotyping purity for event horizon of 2 year: {metric[0]} | 3 years: {metric[1]} | 5 years: {metric[2]}')
-
-    #     phenotypes_lst.append(phenotypes)
-
-    # for c, phenotypes in enumerate(phenotypes_lst):
-    #     for p in np.unique(phenotypes):
-    #         with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
-    #             print(features_raw[features_raw[condition]==condition_[c]][phenotypes == p][cat_feats+num_feats].describe())
-
-    #     d = pd.get_dummies(features_raw[features_raw[condition]==condition_[c]][cat_feats+num_feats], 
-    #                    columns=cat_feats, drop_first=True)
-                
-    #     clf = tree.DecisionTreeClassifier()
-    #     clf = clf.fit(d, phenotypes)
-    #     plt.figure(figsize=(25, 10)) 
-    #     tree.plot_tree(clf, fontsize=10, max_depth=3, feature_names=d.columns, class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
-    #     plt.title('Decision Tree for ' + condition_names[condition_[c]] + ' Phenotypes')
-    #     plt.savefig('tree_'+str(condition_names[condition_[c]])+'.png')
-    #     plt.close()
 
     return phenotypes_lst
 
@@ -524,12 +455,15 @@ def bari2d():
     outcome['time'] /= 365.25
 
     o_ = outcome.set_index('time', append=True)
+    # first time that the patient have outcome
     idx = o_['event'] == 1
     have_outcome = o_.loc[idx].reset_index().groupby('id').min('time')
 
+    # last time that patient not have outcome
     idx = o_['event'] == 0
     no_outcome = o_.loc[idx].reset_index().groupby('id').max('time')
 
+    # if patient experienced the outcome, set it to have_outcome. if not keep it no_outcome
     outcome_ = no_outcome.copy()
     outcome_.loc[have_outcome.index] = have_outcome
     outcome_ = outcome_.reset_index().set_index('id')
