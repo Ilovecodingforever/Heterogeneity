@@ -1,3 +1,6 @@
+# pd.set_option('display.max_rows', 500)
+# pd.set_option('display.max_columns', 500)
+# pd.set_option('display.width', 1000)
 import os
 import sys
 import copy
@@ -24,6 +27,7 @@ from auton_survival.preprocessing import Preprocessor
 from sklearn.model_selection import train_test_split
 from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 from examples.cmhe_demo_utils import *
+
 
 
 
@@ -171,39 +175,22 @@ def fit_CMHE(x, t, e, a):
 
 
 
+def phenotyping(outcomes_raw, features_raw, cat_feats, num_feats):
 
+    '''
+    cat_feats, num_feats: the features that need to be preprocessed (scaled, one-hot encoded)
+    '''
 
-def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardtrt'):
-
-    # intervention = 'sex'
-    # condition = 'cardtrt'
-
-    condition_ = pd.unique(features_raw[condition])
     phenotypes_lst = []
-
-    # 0=Medical Therapy, 1=Early Revascularization
-    # 1 male, 2 female
-    condition_names = {1: 'Male', 2:  'Female'}
-    intervention_names = {0: 'Medical Therapy (control)', 1: 'Early Revascularization (treatment)'}
-
-    # condition_names = {0: 'Medical Therapy (control)', 1: 'Early Revascularization (treatment)'}
-    # intervention_names = {1: 'Male', 2:  'Female'}
 
 
     # Identify categorical (cat_feats) and continuous (num_feats) features
-    cat_feats = ['sex',
-                'race', 'hxmi', 'hxhtn',
-                'angcls6w', 'smkcat', 'ablvef', 'geographic_reg'
-                ]
-    num_feats = ['age', 'bmi', 'dmdur'
-                ]
-
-
     features = features_raw
     outcomes = outcomes_raw.loc[features.index]
 
-    preprocessor = Preprocessor(cat_feat_strat='ignore', num_feat_strat= 'mean')
-    x = preprocessor.fit_transform(features[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
+    x = features.copy()
+    preprocessor = Preprocessor(cat_feat_strat='ignore', num_feat_strat='mean')
+    x[cat_feats + num_feats] = preprocessor.fit_transform(x[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
                                     one_hot=True, fill_value=-1).astype(float)
 
     # data
@@ -250,6 +237,84 @@ def phenotyping(outcomes_raw, features_raw, condition='sex', intervention='cardt
 
 
     return phenotypes_lst
+
+
+
+
+# def phenotyping(outcomes_raw, features_raw, cat_feats, num_feats, condition='sex', intervention='cardtrt'):
+
+#     '''
+#     cat_feats, num_feats: the features that need to be preprocessed (scaled, one-hot encoded)
+#     '''
+
+#     # intervention = 'sex'
+#     # condition = 'cardtrt'
+
+#     condition_ = pd.unique(features_raw[condition])
+#     phenotypes_lst = []
+
+#     # 0=Medical Therapy, 1=Early Revascularization
+#     # 1 male, 2 female
+#     condition_names = {1: 'Male', 2:  'Female'}
+#     intervention_names = {0: 'Medical Therapy (control)', 1: 'Early Revascularization (treatment)'}
+
+#     # condition_names = {0: 'Medical Therapy (control)', 1: 'Early Revascularization (treatment)'}
+#     # intervention_names = {1: 'Male', 2:  'Female'}
+
+
+#     # Identify categorical (cat_feats) and continuous (num_feats) features
+#     features = features_raw
+#     outcomes = outcomes_raw.loc[features.index]
+
+#     x = features.copy()
+#     preprocessor = Preprocessor(cat_feat_strat='ignore', num_feat_strat= 'mean')
+#     x[cat_feats + num_feats] = preprocessor.fit_transform(features[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
+#                                     one_hot=True, fill_value=-1).astype(float)
+
+#     # data
+#     x_tr = x
+#     # outcomes
+#     y_tr = outcomes
+#     outcomes_tr = y_tr
+#     t_tr = outcomes['time']
+#     e_tr = outcomes['event']
+#     # intervention
+#     a_tr = features[intervention]
+#     interventions_tr = a_tr
+#     a_tr_names = a_tr.apply(lambda x: intervention_names[x])
+#     # sex
+#     # sex_tr_names = features[condition].apply(lambda x: condition_names[x])
+#     # condition_tr_names = pd.concat([a_tr_names, sex_tr_names], axis=1)
+
+#     phenotypes = fit_CMHE(x_tr, t_tr, e_tr, a_tr)
+
+#     plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a_tr_names, condition)
+
+
+#     column_names = ['Age', 'BMI', 'Duration of Diabetes', 'Female', 'Non-White', 'History of MI',
+#                     'History of Hypertension',
+#                     'Baseline Stable 3, 4 Angina', 'Baseline Unstable Angina', 'Baseline No Angina',
+#                     'Former Smoker', 'Current Smoker',
+#                     'Abnormal LVEF', 'Non-USA']
+
+#     for p in np.unique(phenotypes):
+#         with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+#             print(features_raw[phenotypes == p][cat_feats+num_feats].describe())
+
+#     d = pd.get_dummies(features_raw[cat_feats+num_feats], columns=cat_feats, drop_first=True)
+
+#     clf = tree.DecisionTreeClassifier()
+#     clf = clf.fit(d, phenotypes)
+#     plt.figure(figsize=(30, 10))
+#     tree.plot_tree(clf, fontsize=10, max_depth=4, feature_names=column_names,
+#                 class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
+#     plt.title('Decision Tree for Phenotypes')
+#     plt.savefig('tree.png')
+#     plt.close()
+
+
+
+#     return phenotypes_lst
 
 
 
@@ -479,9 +544,14 @@ def bari2d():
 
     dataset['condition'] = [", ".join([s, i]) for s, i in dataset[['sex', 'intervention']].values]
 
+    cat_feats = ['sex',
+                'race', 'hxmi', 'hxhtn',
+                'angcls6w', 'smkcat', 'ablvef', 'geographic_reg'
+                ]
+    num_feats = ['age', 'bmi', 'dmdur']
 
 
-    phenotyping(outcome_, dataset_raw.loc[outcome_.index])
+    phenotyping(outcome_, dataset_raw.loc[outcome_.index][cat_feats + num_feats], cat_feats, num_feats)
 
 
 
@@ -489,10 +559,79 @@ def bari2d():
 
 
 
+def sts():
+    data_raw = pd.read_csv('/zfsauton2/home/mingzhul/Heterogeneity/STS_preprocessing_files/timetoevent_cabg.csv')
+    data = data_raw.copy()
+    
+    outcome_names = [
+        # 'CTB', # ceased to breathe
+                     'ReadmitFlag', 'ReadmitDays', 
+                     'NonCardiacFlag', 'NonCardiacReadmitDays', 
+                     'CardiacFlag', 'CardiacReadmitDays', 
+                     'MIFlag', 'MIReadmitDays', 
+                     'ACSFlag', 'ACSReadmitDays', 
+                     'AFFlag', 'AFReadmitDays',
+                     'HFFlag', 'HFReadmitDays', 
+                     'StrokeFlag', 'StrokeReadmitDays',
+                     'H_StrokeFlag', 'H_StrokeReadmitDays', 
+                     'I_StrokeFlag', 'I_StrokeReadmitDays', 
+                     'TIAFlag', 'TIAReadmitDays', 
+                     'MACCEFlag', 'MACCEReadmitDays', 
+                     'DrugFlag', 'DrugReadmitDays', 
+                     'EndoFlag', 'ENDOReadmitDays', 
+                     'ARRESTFlag', 'ARRESTReadmitDays', 
+                     'VTACHFlag', 'VTACHReadmitDays', 
+                     'VFIBFlag', 'VFIBReadmitDays', 
+                     'PCI_Flag', 'PCI_Days', 
+                     'CABG_Flag', 'CABG_Days', 
+                     'VAD_Flag', 'VAD_Days',
+                     'Heart_Transplant_Flag', 'Heart_Transplant_Days']
+
+    data['CTBFlag'] = data['CTB']
+    data['CTBDays'] = data[[s for s in outcome_names if 'Days' in s]].max(axis=1)
+    data.drop('CTB', axis=1, inplace=True)
+    outcome_names = ['CTBFlag', 'CTBDays'] + outcome_names
+    
+    # filter patients with type 2 diabetes mellitus (T2DM) and stable coronary artery disease (CAD)
+    data = data[(data['diabetes'] == 1) & (data['status'] == 1)]
+
+    outcome = data[['ID'] + outcome_names].set_index('ID')
+    
+    # get an outcome
+    outcome_idx = 0
+    outcome = outcome[[outcome_names[outcome_idx*2], outcome_names[outcome_idx*2+1]]].rename(
+        columns={outcome_names[outcome_idx*2]: 'event',
+                 outcome_names[outcome_idx*2+1]: 'time'})
+
+    outcome = outcome.dropna()
+    dataset = data.drop(outcome_names, axis=1).set_index('ID').loc[outcome.index]
+
+    # checked that max # categories: 6
+    # the features that need to be preprocessed (scaled, one-hot encoded)
+    cat_feats = [c for c in dataset.columns if len(dataset[c].unique()) <= 6]
+    num_feats = [c for c in dataset.columns if len(dataset[c].unique()) > 6]
+
+    # TODO: shouldn't include Mortalty?
+
+    phenotyping(outcome, dataset, cat_feats, num_feats)
+
+
+    print()
+
+
+# dict = pd.read_csv('/zfsauton2/home/mingzhul/Heterogeneity/STS_preprocessing_files/que_DataDictionary.csv', encoding='latin1')
+# not_found = []
+# for i in range(len(data.columns)):
+#     if data.columns[i].lower() not in dict['Group Of ShortName'].str.lower().values:
+#         not_found.append(data.columns[i])
+
+
 
 
 
 if __name__ == '__main__':
+
+    sts()
 
     dataset_name = 'BARI2D'
 

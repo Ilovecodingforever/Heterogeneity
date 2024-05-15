@@ -1,3 +1,4 @@
+ID: dID
 data_procedure: CABG
 allphase:
     iabpwhen: iabpwhen #iabp iniated during preop, intraop, postop
@@ -37,4 +38,25 @@ surg_param_data_path: [/zfsauton/project/upmc_intraop/00513_Isolated_CABG_202112
 # surg_param_data_path: [/zfsauton/project/upmc_intraop/00513_AVR_CABG_20211214/00513_AVR_CABG_Surgical_Parameters_20211214.csv]
 
 
-# Features in cohort dataset
+# Outcomes in cohort dataset
+class:
+    renal_failure: [crenfail]
+    mortality: [mt30stat]
+    prolonged_ventilation: [cpvntlng]
+    reoperation: [coprebld, 
+                coprevlv, 
+                creintmi, 
+                copreoth, 
+                caortreint]
+    stroke: [cnstrokp]
+    dswi: [deepsterninf]
+    mm: [mt30stat, 
+                cnstrokp, 
+                crenfail, 
+                cpvntlng, 
+                deepsterninf, 
+                coprebld, 
+                coprevlv, 
+                creintmi, 
+                copreoth, 
+                caortreint]

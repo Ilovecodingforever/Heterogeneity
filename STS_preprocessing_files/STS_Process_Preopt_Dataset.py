@@ -1,20 +1,9 @@
 import pandas as pd
 import numpy as np
 import yaml
-from sklearn.preprocessing import OneHotEncoder
+from utils import _ohe_feats
 
 config = yaml.load(open('Data_Processing_config.yaml'), Loader=yaml.FullLoader)
-
-def _ohe_feats(data, feature_name, index_name):
-    ohe = OneHotEncoder(categories='auto', drop=None)
-    ohe_feat = ohe.fit_transform(data[feature_name].values.reshape(-1, 1)).toarray()
-    ohe_names = [i.replace('.0', '') for i in ohe.get_feature_names_out([feature_name])]
-    ohe1 = pd.DataFrame(data=ohe_feat, columns=ohe_names).astype('int64')
-    ohe1 = ohe1.iloc[:, :-1]
-    ohe1.set_index(data.index.values, inplace=True)
-    ohe1.index.name = index_name
-    
-    return ohe1
 
 demo = pd.read_csv(config['cohort_data_path'])
 preopt = pd.DataFrame(demo, columns=['dID',

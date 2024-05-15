@@ -5,3 +5,4 @@ torch
 lifelines
 matplotlib
 tqdm
+pyyaml
