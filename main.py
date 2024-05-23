@@ -52,17 +52,44 @@ def find_max_treatment_effect_phenotype(g, zeta_probs, factual_outcomes):
     return np.nanargmax(mean_differential_survival)
 
 
-def plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a_tr_names, condition):
+def plot_KM(phenotypes, condition_, outcomes, features, condition_names, a_tr_names, condition,
+            all_in_one=False):
+
+    if all_in_one:
+        f, ax = plt.subplots(1, sharey=True, figsize=(15, 10))
+        
+        groups = pd.DataFrame({'phenotypes': phenotypes+1, 'condition': features[condition]}, index=outcomes.index)
+        groups = groups.apply(lambda x: str(condition_names[x['condition']]) + ' Phenotype ' + str(x['phenotypes']), axis=1)
+        plot_kaplanmeier(outcomes, ax=ax, plot_counts=False, groups=groups)
+
+        plt.xlabel('Time to outcome (years)')
+        plt.ylabel('Survival probability')
+        plt.grid(True)
+        # f.set_size_inches(14*2, 7*2)
+        plt.savefig('_KM.png')
+        plt.close()
+
+
+        f, ax = plt.subplots(1, figsize=(15, 10))
+        groups = pd.DataFrame({'phenotypes': phenotypes+1}, index=outcomes.index)
+        groups = groups.apply(lambda x: 'Phenotype ' + str(x['phenotypes']), axis=1)
+        plot_kaplanmeier(outcomes, ax=ax, plot_counts=False, groups=groups)        
+
+        plt.xlabel('Time to outcome (years)')
+        plt.ylabel('Survival probability')
+        plt.grid(True)
+        # f.set_size_inches(14, 7)
+        plt.savefig('_KM_all.png')
+        plt.close()
+        
+        return
+
 
     f, axs = plt.subplots(len(condition_), len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
 
     for i, p in enumerate(np.unique(phenotypes)):
         for j, c in enumerate(condition_):
-            d = outcomes.loc[x_tr.index].loc[phenotypes==p]
-            # d['condition'] = [", ".join([s, i]) for s, i in condition_tr_names.loc[d.index][[condition, intervention]].values]
-
-            # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
-            # plot_kaplanmeier(d, d['condition'], ax=axs[i], plot_counts=True)
+            d = outcomes.loc[features.index].loc[phenotypes==p]
             plot_kaplanmeier(d[features[condition] == c], a_tr_names[features[condition] == c], ax=axs[j][i], plot_counts=False)
 
             axs[j][i].set_xlabel('Time to Unstable Angina (years)')
@@ -78,9 +105,7 @@ def plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a
     f, axs = plt.subplots(1, len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
     for i, p in enumerate(np.unique(phenotypes)):
 
-        d = outcomes.loc[x_tr.index].loc[phenotypes==p]
-
-        # Estimate the probability of event-free survival for phenotypes using the Kaplan Meier estimator.
+        d = outcomes.loc[features.index].loc[phenotypes==p]
         plot_kaplanmeier(d, a_tr_names.loc[d.index], ax=axs[i], plot_counts=False)
 
         axs[i].set_xlabel('Time to Unstable Angina (years)')
@@ -92,6 +117,7 @@ def plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a
     plt.savefig('_KM_all.png')
     plt.close()
 
+    print()
 
 
 
@@ -111,7 +137,7 @@ def fit_CMHE(x, t, e, a):
     # gs = [1, 2, 3] # number of underlying treatment effect phenotypes.
     # layerss = [[8, 8], [64, 64], [128, 128]] # number of neurons in each hidden layer.
     ks = [1] # number of underlying base survival phenotypes
-    gs = [2] # number of underlying treatment effect phenotypes.    
+    gs = [2] # number of underlying treatment effect phenotypes.
     layerss = [[50, 50]] # number of neurons in each hidden layer.
 
     iters = 100 # number of training epochs
@@ -144,7 +170,7 @@ def fit_CMHE(x, t, e, a):
 
         # Now let us predict survival using CMHE
         predictions_test_CMHE = model.predict_survival(x_vl, a_vl, t=horizons)
-        CI1, CI3, CI5, IBS = factual_evaluate((x_tr, t_tr, e_tr, a_tr), (x_vl, t_vl, e_vl, a_vl), 
+        CI1, CI3, CI5, IBS = factual_evaluate((x_tr, t_tr, e_tr, a_tr), (x_vl, t_vl, e_vl, a_vl),
                                             horizons, predictions_test_CMHE)
         print(f'IBS: {IBS}')
         if best_IBS > IBS:
@@ -161,28 +187,29 @@ def fit_CMHE(x, t, e, a):
                     optimizer=optimizer, patience=patience)
     print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
 
+    zeta_train = predict_CMHE(model, x)
+    
+    return zeta_train, model
+
+
+
+def predict_CMHE(model, x):
+
     zeta_probs_train = model.predict_latent_phi(x)
     zeta_train =  np.argmax(zeta_probs_train, axis=1)
     print(f'Distribution of individuals in each treatement phenotype in the training data: \
     {np.unique(zeta_train, return_counts=True)[1]}')
-
-
+    
     return zeta_train
 
 
 
 
-
-
-
-def phenotyping(outcomes_raw, features_raw, cat_feats, num_feats):
+def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, model=None):
 
     '''
     cat_feats, num_feats: the features that need to be preprocessed (scaled, one-hot encoded)
     '''
-
-    phenotypes_lst = []
-
 
     # Identify categorical (cat_feats) and continuous (num_feats) features
     features = features_raw
@@ -190,34 +217,33 @@ def phenotyping(outcomes_raw, features_raw, cat_feats, num_feats):
 
     x = features.copy()
     preprocessor = Preprocessor(cat_feat_strat='ignore', num_feat_strat='mean')
-    x[cat_feats + num_feats] = preprocessor.fit_transform(x[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
+    processed = preprocessor.fit_transform(x[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
                                     one_hot=True, fill_value=-1).astype(float)
+    x.drop(cat_feats + num_feats, axis=1, inplace=True)
+    x[processed.columns] = processed
 
     # data
     x_tr = x
     # outcomes
     y_tr = outcomes
-    outcomes_tr = y_tr
     t_tr = outcomes['time']
     e_tr = outcomes['event']
-    # intervention
-    a_tr = features[intervention]
-    interventions_tr = a_tr
-    a_tr_names = a_tr.apply(lambda x: intervention_names[x])
-    # sex
-    # sex_tr_names = features[condition].apply(lambda x: condition_names[x])
-    # condition_tr_names = pd.concat([a_tr_names, sex_tr_names], axis=1)
+    # treatment
+    a_tr = treatment
 
-    phenotypes = fit_CMHE(x_tr, t_tr, e_tr, a_tr)
+    # train
+    if model is None:
+        phenotypes, model = fit_CMHE(x_tr, t_tr, e_tr, a_tr)
+    else:
+        phenotypes = predict_CMHE(model, x_tr)
 
-    plot_KM(phenotypes, condition_, x_tr, outcomes, features, condition_names, a_tr_names, condition)
+    # graphs
+    plot_KM(phenotypes, [0, 1], y_tr, features, {1: 'Female', 0: 'Male'},
+            pd.Series(1, name='CABG', index=x_tr.index), 'female',
+            all_in_one=True)
 
 
-    column_names = ['Age', 'BMI', 'Duration of Diabetes', 'Female', 'Non-White', 'History of MI',
-                    'History of Hypertension',
-                    'Baseline Stable 3, 4 Angina', 'Baseline Unstable Angina', 'Baseline No Angina',
-                    'Former Smoker', 'Current Smoker',
-                    'Abnormal LVEF', 'Non-USA']
+    column_names = x_tr.columns
 
     for p in np.unique(phenotypes):
         with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
@@ -227,16 +253,16 @@ def phenotyping(outcomes_raw, features_raw, cat_feats, num_feats):
 
     clf = tree.DecisionTreeClassifier()
     clf = clf.fit(d, phenotypes)
-    plt.figure(figsize=(30, 10))
+    plt.figure(figsize=(40, 10))
     tree.plot_tree(clf, fontsize=10, max_depth=4, feature_names=column_names,
                 class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
     plt.title('Decision Tree for Phenotypes')
-    plt.savefig('tree.png')
+    plt.savefig('tree.pdf')
     plt.close()
 
 
 
-    return phenotypes_lst
+    return model
 
 
 
@@ -546,44 +572,45 @@ def bari2d():
 
     cat_feats = ['sex',
                 'race', 'hxmi', 'hxhtn',
-                'angcls6w', 'smkcat', 'ablvef', 'geographic_reg'
+                # 'angcls6w', 'smkcat', 'ablvef', 'geographic_reg'
                 ]
-    num_feats = ['age', 'bmi', 'dmdur']
+    num_feats = ['age', 'bmi', 
+                #  'dmdur'
+                 ]
 
-
-    phenotyping(outcome_, dataset_raw.loc[outcome_.index][cat_feats + num_feats], cat_feats, num_feats)
-
-
-
-    return dataset, 'condition'
+    model = phenotyping(outcome_, dataset_raw.loc[outcome_.index][cat_feats + num_feats], dataset_raw.loc[outcome_.index]['cardtrt'], cat_feats, num_feats)
 
 
 
-def sts():
+    return dataset, 'condition', model
+
+
+
+def sts(model):
     data_raw = pd.read_csv('/zfsauton2/home/mingzhul/Heterogeneity/STS_preprocessing_files/timetoevent_cabg.csv')
     data = data_raw.copy()
-    
+
     outcome_names = [
         # 'CTB', # ceased to breathe
-                     'ReadmitFlag', 'ReadmitDays', 
-                     'NonCardiacFlag', 'NonCardiacReadmitDays', 
-                     'CardiacFlag', 'CardiacReadmitDays', 
-                     'MIFlag', 'MIReadmitDays', 
-                     'ACSFlag', 'ACSReadmitDays', 
+                     'ReadmitFlag', 'ReadmitDays',
+                     'NonCardiacFlag', 'NonCardiacReadmitDays',
+                     'CardiacFlag', 'CardiacReadmitDays',
+                     'MIFlag', 'MIReadmitDays',
+                     'ACSFlag', 'ACSReadmitDays',
                      'AFFlag', 'AFReadmitDays',
-                     'HFFlag', 'HFReadmitDays', 
+                     'HFFlag', 'HFReadmitDays',
                      'StrokeFlag', 'StrokeReadmitDays',
-                     'H_StrokeFlag', 'H_StrokeReadmitDays', 
-                     'I_StrokeFlag', 'I_StrokeReadmitDays', 
-                     'TIAFlag', 'TIAReadmitDays', 
-                     'MACCEFlag', 'MACCEReadmitDays', 
-                     'DrugFlag', 'DrugReadmitDays', 
-                     'EndoFlag', 'ENDOReadmitDays', 
-                     'ARRESTFlag', 'ARRESTReadmitDays', 
-                     'VTACHFlag', 'VTACHReadmitDays', 
-                     'VFIBFlag', 'VFIBReadmitDays', 
-                     'PCI_Flag', 'PCI_Days', 
-                     'CABG_Flag', 'CABG_Days', 
+                     'H_StrokeFlag', 'H_StrokeReadmitDays',
+                     'I_StrokeFlag', 'I_StrokeReadmitDays',
+                     'TIAFlag', 'TIAReadmitDays',
+                     'MACCEFlag', 'MACCEReadmitDays',
+                     'DrugFlag', 'DrugReadmitDays',
+                     'EndoFlag', 'ENDOReadmitDays',
+                     'ARRESTFlag', 'ARRESTReadmitDays',
+                     'VTACHFlag', 'VTACHReadmitDays',
+                     'VFIBFlag', 'VFIBReadmitDays',
+                     'PCI_Flag', 'PCI_Days',
+                     'CABG_Flag', 'CABG_Days',
                      'VAD_Flag', 'VAD_Days',
                      'Heart_Transplant_Flag', 'Heart_Transplant_Days']
 
@@ -591,19 +618,20 @@ def sts():
     data['CTBDays'] = data[[s for s in outcome_names if 'Days' in s]].max(axis=1)
     data.drop('CTB', axis=1, inplace=True)
     outcome_names = ['CTBFlag', 'CTBDays'] + outcome_names
-    
+
     # filter patients with type 2 diabetes mellitus (T2DM) and stable coronary artery disease (CAD)
     data = data[(data['diabetes'] == 1) & (data['status'] == 1)]
 
     outcome = data[['ID'] + outcome_names].set_index('ID')
-    
+
     # get an outcome
     outcome_idx = 0
     outcome = outcome[[outcome_names[outcome_idx*2], outcome_names[outcome_idx*2+1]]].rename(
         columns={outcome_names[outcome_idx*2]: 'event',
                  outcome_names[outcome_idx*2+1]: 'time'})
-
     outcome = outcome.dropna()
+    outcome['time'] /= 365.25
+
     dataset = data.drop(outcome_names, axis=1).set_index('ID').loc[outcome.index]
 
     # checked that max # categories: 6
@@ -613,7 +641,23 @@ def sts():
 
     # TODO: shouldn't include Mortalty?
 
-    phenotyping(outcome, dataset, cat_feats, num_feats)
+    dataset['Female'] += 1
+    dataset['PrevMI'] = np.clip(dataset['PrevMI'], 0, 1)
+    dataset['Hypertn'] = np.clip(dataset['Hypertn'], 0, 1)
+    
+
+    cat_feats = ['Female', 'Racecaucasian', 'PrevMI', 'Hypertn', 
+                #  'CardSympTimeOfAdm', 'Recentishsmoker', 
+                # 'ablvef', 'geographic_reg'
+                ]
+    num_feats = ['Age', 'Bmi',
+                #  'dmdur'
+                ]
+
+
+    treatment = pd.Series(1, name='intervention', index=dataset.index)
+
+    phenotyping(outcome, dataset[cat_feats+num_feats], treatment, cat_feats, num_feats, model)
 
 
     print()
@@ -630,8 +674,8 @@ def sts():
 
 
 if __name__ == '__main__':
-
-    sts()
+    dataset, attribute_var, model = bari2d()
+    sts(model)
 
     dataset_name = 'BARI2D'
 
