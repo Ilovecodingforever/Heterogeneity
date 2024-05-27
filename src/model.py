@@ -10,11 +10,11 @@ import matplotlib.pyplot as plt
 
 from sklearn import tree
 
-sys.path.append('../')
-sys.path.append('../auton-survival')
+# sys.path.append('../')
+# sys.path.append('../auton-survival')
 
 import auton_survival
-from auton_survival.reporting import plot_kaplanmeier
+# from auton_survival.reporting import plot_kaplanmeier
 from auton_survival.models.dcm import DeepCoxMixtures
 from auton_survival.metrics import phenotype_purity
 from auton_survival.models.dcm import DeepCoxMixtures
@@ -24,8 +24,62 @@ from auton_survival.models.dcm.dcm_utilities import predict_latent_z
 from auton_survival.preprocessing import Preprocessor
 from sklearn.model_selection import train_test_split
 from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
-from examples.cmhe_demo_utils import *
 
+
+from cmhe_demo_utils import *
+
+import numpy as np
+import pandas as pd
+
+from lifelines import KaplanMeierFitter
+
+from lifelines import KaplanMeierFitter
+from lifelines.plotting import add_at_risk_counts
+
+
+
+
+def plot_kaplanmeier(outcomes, groups=None, plot_counts=False, ax=None, **kwargs):
+
+    """Plot a Kaplan-Meier Survival Estimator stratified by groups.
+
+    Parameters
+    ----------
+    outcomes: pandas.DataFrame
+        a pandas dataframe containing the survival outcomes. The index of the
+        dataframe should be the same as the index of the features dataframe.
+        Should contain a column named 'time' that contains the survival time and
+        a column named 'event' that contains the censoring status.
+        \( \delta_i = 1 \) if the event is observed.
+    groups: pandas.Series
+        a pandas series containing the groups to stratify the Kaplan-Meier
+        estimates by.
+    plot_counts: bool
+        if True, plot the number of at risk and censored individuals in each group.
+
+    """
+
+    if groups is None:
+        groups = np.array([1]*len(outcomes))
+
+    curves = {}
+
+    from matplotlib import pyplot as plt
+
+    if ax is None:
+        ax = plt.subplot(111)
+
+    for group in sorted(set(groups)):
+        if pd.isna(group): continue
+
+        curves[group] = KaplanMeierFitter().fit(outcomes[groups==group]['time'],
+                                                outcomes[groups==group]['event'])
+        ax = curves[group].plot(label=group, ax=ax, **kwargs)
+
+    if plot_counts:
+        add_at_risk_counts(iter([curves[group] for group in curves]), ax=ax)
+
+    return ax
 
 
 
@@ -49,20 +103,27 @@ def find_max_treatment_effect_phenotype(g, zeta_probs, factual_outcomes):
     return np.nanargmax(mean_differential_survival)
 
 
-def plot_KM(phenotypes, condition_, outcomes, features, condition_names, a_tr_names, condition,
-            all_in_one=False, name=''):
+def plot_KM(phenotypes, outcomes, features, condition_names, condition, treatment=None, name=''):
+    '''
+    phenotypes: the phenotypes of the individuals
+    outcomes: the outcomes dataframe
+    features: the features dataframe
+    condition_names: dictionary of the feature used to stratify the KM curve
+    treatment: the treatment column
+    condition: name of the feature used to stratify the KM curve
+    
+    '''
 
-    if all_in_one:
+    if treatment is None:
         f, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(15, 10))
-        
-        for j, c in enumerate(condition_):
+        for j, c in enumerate(condition_names.keys()):
             groups = pd.DataFrame({'phenotypes': phenotypes+1, 'condition': features[condition]}, index=outcomes.index)
             d = groups[groups['condition'] == c]['phenotypes'].apply(lambda x: 'Phenotype ' + str(x))
             # groups = groups.apply(lambda x: str(condition_names[x['condition']]) + ' Phenotype ' + str(x['phenotypes']), axis=1)
-            plot_kaplanmeier(outcomes.loc[d.index], ax=axs[j], plot_counts=False, groups=d)
+            ax = plot_kaplanmeier(outcomes.loc[d.index], plot_counts=False, groups=d, ax=axs[j])
 
-            axs[j].set_title(condition_names[c])
-            axs[j].grid(True)
+            ax.set_title(condition_names[c])
+            ax.grid(True)
 
         plt.suptitle(name + ' Kaplan-Meier curve')
         plt.xlabel('Time to death (years)')
@@ -75,7 +136,7 @@ def plot_KM(phenotypes, condition_, outcomes, features, condition_names, a_tr_na
         f, ax = plt.subplots(1, figsize=(15, 10))
         groups = pd.DataFrame({'phenotypes': phenotypes+1}, index=outcomes.index)
         groups = groups.apply(lambda x: 'Phenotype ' + str(x['phenotypes']), axis=1)
-        plot_kaplanmeier(outcomes, ax=ax, plot_counts=False, groups=groups)        
+        ax = plot_kaplanmeier(outcomes, plot_counts=False, groups=groups, ax=ax)        
 
         plt.suptitle(name + ' Kaplan-Meier curve')
         plt.xlabel('Time to death (years)')
@@ -88,19 +149,19 @@ def plot_KM(phenotypes, condition_, outcomes, features, condition_names, a_tr_na
         return
 
 
-    f, axs = plt.subplots(len(condition_), len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
+    f, axs = plt.subplots(len(condition_names.keys()), len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
 
-    a_tr_names = a_tr_names.apply(lambda x: 'Treatment' if x == 1 else 'Control')
+    treatment = treatment.apply(lambda x: 'Treatment' if x == 1 else 'Control')
 
     for i, p in enumerate(np.unique(phenotypes)):
-        for j, c in enumerate(condition_):
+        for j, c in enumerate(condition_names.keys()):
             d = outcomes.loc[features.index].loc[phenotypes==p]
-            plot_kaplanmeier(d[features[condition] == c], a_tr_names[features[condition] == c], ax=axs[j][i], plot_counts=False)
+            ax = plot_kaplanmeier(d[features[condition] == c], treatment[features[condition] == c], plot_counts=False, ax=axs[j, i])
 
-            axs[j][i].set_xlabel('Time to death (years)')
-            axs[j][i].set_ylabel('Survival probability')
-            axs[j][i].set_title(condition_names[c] + ' Phenotype '+ str(i+1))
-            axs[j][i].grid(True)
+            ax.set_xlabel('Time to death (years)')
+            ax.set_ylabel('Survival probability')
+            ax.set_title(condition_names[c] + ' Phenotype '+ str(i+1))
+            ax.grid(True)
 
     plt.suptitle(name + ' Kaplan-Meier curve')
     # f.set_size_inches(14*2, 7*2)
@@ -112,12 +173,12 @@ def plot_KM(phenotypes, condition_, outcomes, features, condition_names, a_tr_na
     for i, p in enumerate(np.unique(phenotypes)):
 
         d = outcomes.loc[features.index].loc[phenotypes==p]
-        plot_kaplanmeier(d, a_tr_names.loc[d.index], ax=axs[i], plot_counts=False)
+        ax = plot_kaplanmeier(d, treatment.loc[d.index], plot_counts=False, ax=axs[i])
 
-        axs[i].set_xlabel('Time to death (years)')
-        axs[i].set_ylabel('Survival probability')
-        axs[i].set_title('Phenotype '+ str(i+1))
-        axs[i].grid(True)
+        ax.set_xlabel('Time to death (years)')
+        ax.set_ylabel('Survival probability')
+        ax.set_title('Phenotype '+ str(i+1))
+        ax.grid(True)
 
     # f.set_size_inches(14, 7)
     plt.suptitle(name + ' Kaplan-Meier curve')
@@ -131,9 +192,6 @@ def plot_KM(phenotypes, condition_, outcomes, features, condition_names, a_tr_na
 
 
 def fit_CMHE(x, t, e, a):
-    random_seed = 10
-    torch.manual_seed(random_seed)
-    np.random.seed(random_seed)
 
     horizons = [1, 3, 5]
 
@@ -169,7 +227,7 @@ def fit_CMHE(x, t, e, a):
     for k, g, layers in itertools.product(ks, gs, layerss):
         print(k, g, layers)
         # Instantiate the CMHE model
-        model = DeepCoxMixturesHeterogenousEffects(random_seed=random_seed, k=k, g=g, layers=layers)
+        model = DeepCoxMixturesHeterogenousEffects(random_seed=10, k=k, g=g, layers=layers)
         model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
                         learning_rate=learning_rate, batch_size=batch_size,
                         optimizer=optimizer, patience=patience)
@@ -188,7 +246,7 @@ def fit_CMHE(x, t, e, a):
     print(f'Best IBS: {best_IBS}')
     print(f'Best Params: {best_params}')
     k, g, layers = best_params
-    model = DeepCoxMixturesHeterogenousEffects(random_seed=random_seed, k=k, g=g, layers=layers)
+    model = DeepCoxMixturesHeterogenousEffects(random_seed=10, k=k, g=g, layers=layers)
     model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
                     learning_rate=learning_rate, batch_size=batch_size,
                     optimizer=optimizer, patience=patience)
@@ -212,16 +270,37 @@ def predict_CMHE(model, x):
 
 
 
-def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, model=None, all_in_one=False, name=''):
+def plot_tree(features, phenotypes, name=''):
+    clf = tree.DecisionTreeClassifier()
+    clf = clf.fit(features, phenotypes)
+    plt.figure(figsize=(50, 10))
+    tree.plot_tree(clf, fontsize=10, max_depth=4, feature_names=features.columns,
+                class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
+    plt.title(name + ' Decision Tree for Phenotypes')
+    plt.savefig(name+'_tree.pdf')
+    plt.close()
+
+    print('depth of tree', clf.get_depth())
+
+
+
+
+def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, model=None, name=''):
 
     '''
+    outcomes_raw: the outcomes dataframe
+    features_raw: the features dataframe
+    treatment: the treatment column
     cat_feats, num_feats: the features that need to be preprocessed (scaled, one-hot encoded)
+    model: if None, train a new model, otherwise use the given model
+    name: name of the dataset
     '''
 
     # Identify categorical (cat_feats) and continuous (num_feats) features
     features = features_raw
     outcomes = outcomes_raw.loc[features.index]
 
+    # standardize, one hot encode
     x = features.copy()
     preprocessor = Preprocessor(cat_feat_strat='ignore', num_feat_strat='mean')
     processed = preprocessor.fit_transform(x[cat_feats + num_feats], cat_feats=cat_feats, num_feats=num_feats,
@@ -229,46 +308,19 @@ def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, mod
     x.drop(cat_feats + num_feats, axis=1, inplace=True)
     x[processed.columns] = processed
 
-    # data
-    x_tr = x
-    # outcomes
-    y_tr = outcomes
-    t_tr = outcomes['time']
-    e_tr = outcomes['event']
-    # treatment
-    a_tr = treatment
-
-    # train
+    # train, or apply
     if model is None:
-        phenotypes, model = fit_CMHE(x_tr, t_tr, e_tr, a_tr)
+        phenotypes, model = fit_CMHE(x, outcomes['time'], outcomes['event'], treatment)
     else:
-        phenotypes = predict_CMHE(model, x_tr)
+        phenotypes = predict_CMHE(model, x)
 
-    # graphs
-    plot_KM(phenotypes, [1, 2], y_tr, features, {2: 'Female', 1: 'Male'},
-            a_tr, 
+    # plot KM
+    plot_KM(phenotypes, outcomes, features, {2: 'Female', 1: 'Male'}, 
             'female' if 'female' in cat_feats else 'sex',
-            all_in_one=all_in_one, name=name)
+            treatment=treatment, name=name)
 
-
-    column_names = x_tr.columns
-
-    # for p in np.unique(phenotypes):
-    #     with pd.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
-    #         print(features_raw[phenotypes == p][cat_feats+num_feats].describe())
-
-    d = pd.get_dummies(features_raw[cat_feats+num_feats], columns=cat_feats, drop_first=True)
-
-    clf = tree.DecisionTreeClassifier()
-    clf = clf.fit(d, phenotypes)
-    plt.figure(figsize=(50, 10))
-    tree.plot_tree(clf, fontsize=10, max_depth=4, feature_names=column_names,
-                class_names=['Phenotype 1', 'Phenotype 2'], filled=True, rounded=True)
-    plt.title(name + ' Decision Tree for Phenotypes')
-    plt.savefig(name+'_tree.pdf')
-    plt.close()
-
-    print('depth of tree', clf.get_depth())
+    # plot tree
+    plot_tree(x, phenotypes, name=name)
 
     return model
 

@@ -1,3 +1,4 @@
+auton-survival
 pandas
 numpy
 scikit-survival
