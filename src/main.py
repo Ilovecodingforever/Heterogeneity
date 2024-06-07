@@ -28,7 +28,7 @@ from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
 
 
-from data import topcat, accord, allhat, bari2d, sts
+from data import bari2d, sts, get_characteristics_bari2d_sts
 
 
 
@@ -47,9 +47,12 @@ if __name__ == '__main__':
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
 
-    model = bari2d()
-    sts(model)
+    bari2d_phenotypes, model = bari2d()
+    sts_phenotypes, model = sts(model)
 
+
+    get_characteristics_bari2d_sts(bari2d_phenotypes, sts_phenotypes)
+    
     print()
 
 

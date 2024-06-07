@@ -5,6 +5,11 @@ __pycache__/
 
 auton-survival/
 
+src/STS_preprocessing_files/CABG_Cohort_Preopt_Data_with_Outcomes.csv
+src/STS_preprocessing_files/CABG_Cohort_Preopt_Data.csv
+src/STS_preprocessing_files/timetoevent_cabg.csv
+
+
 # C extensions
 *.so
 

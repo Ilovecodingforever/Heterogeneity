@@ -22,10 +22,38 @@ from auton_survival.preprocessing import Preprocessor
 from sklearn.model_selection import train_test_split
 from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
-
-
 from model import phenotyping
 
+
+
+def get_characteristics(data, phenotype):
+    
+    for group in np.unique(phenotype):
+        idx = phenotype == group
+        print(f'Group: {group}')
+        print(data.iloc[idx].describe())
+
+    pass
+
+
+
+# def get_characteristics_bari2d_sts(bari2d_phenotype, sts_phenotype):
+#     directory = '/zfsauton/project/public/chiragn/counterfactual_phenotyping/datasets'
+#     data_dir = 'BARI2D/data'
+#     data_file = 'bari2d_bl.sas7bdat'
+    
+#     data_path = os.path.join(directory, data_dir, data_file)
+#     dataset_raw = pd.read_sas(data_path).set_index('id')
+
+#     print('Bari2D')
+#     get_characteristics(dataset_raw, bari2d_phenotype)
+
+
+#     data_raw = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
+#     print('STS')
+#     get_characteristics(data_raw, sts_phenotype)
+
+#     return
 
 
 def bari2d():
@@ -89,10 +117,12 @@ def bari2d():
                 #  'dmdur'
                  ]
 
-    model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats], intervention.loc[outcome.index], 
+    phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats], intervention.loc[outcome.index], 
                         cat_feats, num_feats, name='Bari2D')
 
-    return model
+    get_characteristics(dataset_raw.loc[outcome.index], phenotypes)
+
+    return phenotypes, model
 
 
 
@@ -163,10 +193,11 @@ def sts(model):
                 #  'dmdur'
                 ]
 
-    phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS')
+    phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS')
 
-    print()
+    get_characteristics(dataset, phenotypes)
 
+    return phenotypes, model
 
 
 def accord():
