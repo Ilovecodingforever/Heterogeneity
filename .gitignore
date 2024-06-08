@@ -5,7 +5,7 @@ __pycache__/
 
 auton-survival/
 
-src/
+src/*
 !src/STS_preprocessing_files/add_outcomes.py
 !src/STS_preprocessing_files/Data_Processing_config.yaml
 !src/STS_preprocessing_files/STS_Process_Preopt_Dataset.py
