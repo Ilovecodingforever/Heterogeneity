@@ -28,7 +28,7 @@ from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
 
 
-from data import bari2d, sts, get_characteristics_bari2d_sts
+from data import bari2d, sts
 
 
 
@@ -49,9 +49,6 @@ if __name__ == '__main__':
 
     bari2d_phenotypes, model = bari2d()
     sts_phenotypes, model = sts(model)
-
-
-    get_characteristics_bari2d_sts(bari2d_phenotypes, sts_phenotypes)
     
     print()
 

@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import scipy
+
 from sklearn import tree
 
 import auton_survival
@@ -26,34 +28,31 @@ from model import phenotyping
 
 
 
-def get_characteristics(data, phenotype):
+def get_characteristics(data, phenotype, cat_feats, num_feats):
+    pd.set_option('display.max_rows', 500)
+    assert(len(np.unique(phenotype) == 2))
     
-    for group in np.unique(phenotype):
-        idx = phenotype == group
-        print(f'Group: {group}')
-        print(data.iloc[idx].describe())
-
-    pass
-
-
-
-# def get_characteristics_bari2d_sts(bari2d_phenotype, sts_phenotype):
-#     directory = '/zfsauton/project/public/chiragn/counterfactual_phenotyping/datasets'
-#     data_dir = 'BARI2D/data'
-#     data_file = 'bari2d_bl.sas7bdat'
+    num_characteristics = data[num_feats].groupby(phenotype).describe().T
+    mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :]
+    ttest = data[num_feats].apply(lambda x: scipy.stats.ttest_ind(x[phenotype == 0].dropna(), x[phenotype == 1].dropna(), equal_var=False).pvalue, axis=0)
+    print('mean and std for numerical features:')
+    print(mean_std)
+    print('t-test for numerical features, p-values:')
+    print(ttest)
     
-#     data_path = os.path.join(directory, data_dir, data_file)
-#     dataset_raw = pd.read_sas(data_path).set_index('id')
+    lst = [pd.crosstab(data[feat], phenotype) for feat in cat_feats]
+    # same:
+    # lst = [(data[feat].groupby(phenotype).value_counts()).unstack(level=0) for feat in cat_feats]
+    counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value'])
+    chisq = counts.groupby('feature').apply(lambda x: scipy.stats.chi2_contingency(x).pvalue)
+    print('counts for categorical features:')
+    print(counts)
+    print('chi-squared test for categorical features, p-values:')
+    print(chisq)
+    
+    return
 
-#     print('Bari2D')
-#     get_characteristics(dataset_raw, bari2d_phenotype)
 
-
-#     data_raw = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
-#     print('STS')
-#     get_characteristics(data_raw, sts_phenotype)
-
-#     return
 
 
 def bari2d():
@@ -120,7 +119,12 @@ def bari2d():
     phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats], intervention.loc[outcome.index], 
                         cat_feats, num_feats, name='Bari2D')
 
-    get_characteristics(dataset_raw.loc[outcome.index], phenotypes)
+    # checked that max # categories: 6
+    # the features that need to be preprocessed (scaled, one-hot encoded)
+    cat_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) <= 6]
+    num_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) > 6]
+    print('Bari2D characteristics:')
+    get_characteristics(dataset_raw.loc[outcome.index], phenotypes, cat_feats, num_feats)
 
     return phenotypes, model
 
@@ -174,12 +178,6 @@ def sts(model):
 
     dataset = data.drop(outcome_names, axis=1).set_index('ID').loc[outcome.index]
 
-    # checked that max # categories: 6
-    # the features that need to be preprocessed (scaled, one-hot encoded)
-    cat_feats = [c for c in dataset.columns if len(dataset[c].unique()) <= 6]
-    num_feats = [c for c in dataset.columns if len(dataset[c].unique()) > 6]
-
-
     dataset['female'] += 1      # Female: 2, Male: 1
     dataset['prevmi'] = np.clip(dataset['prevmi'], 0, 1)
     dataset['hypertn'] = np.clip(dataset['hypertn'], 0, 1)
@@ -195,7 +193,12 @@ def sts(model):
 
     phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS')
 
-    get_characteristics(dataset, phenotypes)
+    # checked that max # categories: 6
+    # the features that need to be preprocessed (scaled, one-hot encoded)
+    cat_feats = [c for c in dataset.columns if len(dataset[c].unique()) <= 6]
+    num_feats = [c for c in dataset.columns if len(dataset[c].unique()) > 6]
+    print('STS characteristics:')
+    get_characteristics(dataset, phenotypes, cat_feats, num_feats)
 
     return phenotypes, model
 

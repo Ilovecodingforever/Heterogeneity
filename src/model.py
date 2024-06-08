@@ -39,6 +39,80 @@ from lifelines.plotting import add_at_risk_counts
 
 
 
+def print_tree(clf, preprocessor):
+
+    mean = preprocessor.scaler.scaler.mean_
+    std = np.sqrt(preprocessor.scaler.scaler.var_)
+
+    n_nodes = clf.tree_.node_count
+    children_left = clf.tree_.children_left
+    children_right = clf.tree_.children_right
+    feature = clf.tree_.feature
+    threshold = clf.tree_.threshold
+    values = clf.tree_.value
+
+    node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
+    is_leaves = np.zeros(shape=n_nodes, dtype=bool)
+    stack = [(0, 0)]  # start with the root node id (0) and its depth (0)
+    while len(stack) > 0:
+        # `pop` ensures each node is only visited once
+        node_id, depth = stack.pop()
+        
+        node_depth[node_id] = depth
+
+        # If the left and right child of a node is not the same we have a split
+        # node
+        is_split_node = children_left[node_id] != children_right[node_id]
+        # If a split node, append left and right children and depth to `stack`
+        # so we can loop through them
+        if is_split_node:
+            stack.append((children_left[node_id], depth + 1))
+            stack.append((children_right[node_id], depth + 1))
+        else:
+            is_leaves[node_id] = True
+
+    print(
+        "The binary tree structure has {n} nodes and has "
+        "the following tree structure:\n".format(n=n_nodes)
+    )
+    for i in range(n_nodes):
+        
+        # if node_depth[i] > 3:
+        #     continue
+        
+        if is_leaves[i]:
+            print(
+                "{space}node={node} is a leaf node with value={value}.".format(
+                    space=node_depth[i] * "\t", node=i, value=values[i]
+                )
+            )
+        else:
+            thres = threshold[i]
+            if features.columns[feature[i]] == 'age':
+                thres = thres*std[0] + mean[0]
+            if features.columns[feature[i]] == 'bmi':
+                thres = thres*std[1] + mean[1]
+            
+            print(
+                # "{space}node={node} is a split node with value={value}: "
+                "{space}node={node}: "
+                # "go to node {left} if X[:, {feature}] <= {threshold} "
+                "go to node {left} if {feature_name} <= {threshold} "
+                "else to node {right}.".format(
+                    space=node_depth[i] * "\t",
+                    node=i,
+                    left=children_left[i],
+                    # feature=feature[i],
+                    feature_name=features.columns[feature[i]],
+                    threshold=thres,
+                    right=children_right[i],
+                    value=values[i],
+                )
+            )
+                
+
+
+
 def plot_kaplanmeier(outcomes, groups=None, plot_counts=False, ax=None, **kwargs):
 
     """Plot a Kaplan-Meier Survival Estimator stratified by groups.
@@ -72,8 +146,8 @@ def plot_kaplanmeier(outcomes, groups=None, plot_counts=False, ax=None, **kwargs
     for group in sorted(set(groups)):
         if pd.isna(group): continue
 
-        curves[group] = KaplanMeierFitter().fit(outcomes[groups==group]['time'],
-                                                outcomes[groups==group]['event'])
+        curves[group] = KaplanMeierFitter().fit(outcomes.loc[groups==group]['time'],
+                                                outcomes.loc[groups==group]['event'])
         ax = curves[group].plot(label=group, ax=ax, **kwargs)
 
     if plot_counts:
@@ -156,7 +230,7 @@ def plot_KM(phenotypes, outcomes, features, condition_names, condition, treatmen
     for i, p in enumerate(np.unique(phenotypes)):
         for j, c in enumerate(condition_names.keys()):
             d = outcomes.loc[features.index].loc[phenotypes==p]
-            ax = plot_kaplanmeier(d[features[condition] == c], treatment[features[condition] == c], plot_counts=False, ax=axs[j, i])
+            ax = plot_kaplanmeier(d.loc[features[condition] == c], treatment.loc[features[condition] == c], plot_counts=False, ax=axs[j, i])
 
             ax.set_xlabel('Time to death (years)')
             ax.set_ylabel('Survival probability')
@@ -282,76 +356,6 @@ def plot_tree(features, phenotypes, name='', preprocessor=None):
 
     print('depth of tree', clf.get_depth())
 
-    if preprocessor is not None:
-        mean = preprocessor.scaler.scaler.mean_
-        std = np.sqrt(preprocessor.scaler.scaler.var_)
-
-    n_nodes = clf.tree_.node_count
-    children_left = clf.tree_.children_left
-    children_right = clf.tree_.children_right
-    feature = clf.tree_.feature
-    threshold = clf.tree_.threshold
-    values = clf.tree_.value
-
-    node_depth = np.zeros(shape=n_nodes, dtype=np.int64)
-    is_leaves = np.zeros(shape=n_nodes, dtype=bool)
-    stack = [(0, 0)]  # start with the root node id (0) and its depth (0)
-    while len(stack) > 0:
-        # `pop` ensures each node is only visited once
-        node_id, depth = stack.pop()
-        
-        node_depth[node_id] = depth
-
-        # If the left and right child of a node is not the same we have a split
-        # node
-        is_split_node = children_left[node_id] != children_right[node_id]
-        # If a split node, append left and right children and depth to `stack`
-        # so we can loop through them
-        if is_split_node:
-            stack.append((children_left[node_id], depth + 1))
-            stack.append((children_right[node_id], depth + 1))
-        else:
-            is_leaves[node_id] = True
-
-    print(
-        "The binary tree structure has {n} nodes and has "
-        "the following tree structure:\n".format(n=n_nodes)
-    )
-    for i in range(n_nodes):
-        
-        # if node_depth[i] > 3:
-        #     continue
-        
-        if is_leaves[i]:
-            print(
-                "{space}node={node} is a leaf node with value={value}.".format(
-                    space=node_depth[i] * "\t", node=i, value=values[i]
-                )
-            )
-        else:
-            thres = threshold[i]
-            if features.columns[feature[i]] == 'age':
-                thres = thres*std[0] + mean[0]
-            if features.columns[feature[i]] == 'bmi':
-                thres = thres*std[1] + mean[1]
-            
-            print(
-                # "{space}node={node} is a split node with value={value}: "
-                "{space}node={node}: "
-                # "go to node {left} if X[:, {feature}] <= {threshold} "
-                "go to node {left} if {feature_name} <= {threshold} "
-                "else to node {right}.".format(
-                    space=node_depth[i] * "\t",
-                    node=i,
-                    left=children_left[i],
-                    # feature=feature[i],
-                    feature_name=features.columns[feature[i]],
-                    threshold=thres,
-                    right=children_right[i],
-                    value=values[i],
-                )
-            )
-            
     return
 
 
