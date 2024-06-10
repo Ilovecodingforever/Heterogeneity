@@ -33,7 +33,7 @@ def get_characteristics(data, phenotype, cat_feats, num_feats):
     assert(len(np.unique(phenotype) == 2))
     
     num_characteristics = data[num_feats].groupby(phenotype).describe().T
-    mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :]
+    mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :].add_prefix('phenotype ')
     ttest = data[num_feats].apply(lambda x: scipy.stats.ttest_ind(x[phenotype == 0].dropna(), x[phenotype == 1].dropna(), equal_var=False).pvalue, axis=0)
     print('mean and std for numerical features:')
     print(mean_std)
@@ -43,7 +43,7 @@ def get_characteristics(data, phenotype, cat_feats, num_feats):
     lst = [pd.crosstab(data[feat], phenotype) for feat in cat_feats]
     # same:
     # lst = [(data[feat].groupby(phenotype).value_counts()).unstack(level=0) for feat in cat_feats]
-    counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value'])
+    counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value']).add_prefix('phenotype ')
     chisq = counts.groupby('feature').apply(lambda x: scipy.stats.chi2_contingency(x).pvalue)
     print('counts for categorical features:')
     print(counts)
