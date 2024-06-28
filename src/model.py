@@ -403,6 +403,16 @@ def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, mod
             'female' if 'female' in cat_feats else 'sex',
             treatment=treatment, name=name)
 
+
+    out_data = outcomes
+    out_data['phenotypes'] = phenotypes
+    out_data = out_data.join(features)
+    if treatment is not None:
+        out_data = out_data.join(treatment)
+    
+    out_data.to_csv(name+'_phenotypes.csv')
+
+
     # plot tree
     plot_tree(x, phenotypes, name=name, preprocessor=preprocessor)
 

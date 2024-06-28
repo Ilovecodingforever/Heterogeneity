@@ -44,13 +44,37 @@ from data import bari2d, sts
 
 if __name__ == '__main__':
     random_seed = 10
+    
+    # data_raw = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
+
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
 
     bari2d_phenotypes, model = bari2d()
     sts_phenotypes, model = sts(model)
-    
+
     print()
 
 
 
+"""
+Hxetoh
+Hxmi                                    prevmi
+Hxchf
+Hxhtn
+Hxchl
+Hxcva
+Bmi                                     bmi
+Screat
+Sex                                     female
+Smkcat                                  recentishsmoker
+Ablvef (for STS, you have absolute LVEF, need to make it boolean, with EF <50%)
+Hba1c
+Priorstent
+Priorrev
+Race? (non-white vs white)              racecaucasian
+Hispanic?                               ethnicity
+Age                                     age
+
+
+"""

@@ -182,7 +182,6 @@ def sts(model):
     dataset['prevmi'] = np.clip(dataset['prevmi'], 0, 1)
     dataset['hypertn'] = np.clip(dataset['hypertn'], 0, 1)
     
-
     cat_feats = ['female', 'racecaucasian', 'prevmi', 'hypertn', 
                 #  'CardSympTimeOfAdm', 'Recentishsmoker', 
                 # 'ablvef', 'geographic_reg'
