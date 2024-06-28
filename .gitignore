@@ -12,6 +12,9 @@ plots/*
 !src/STS_preprocessing_files/STS_Process_Preopt_Dataset.py
 !src/STS_preprocessing_files/utils.py
 
+STS_phenotypes.csv
+Bari2D_phenotypes.csv
+
 .vscode/
 __MACOSX/
 

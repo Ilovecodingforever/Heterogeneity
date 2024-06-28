@@ -45,7 +45,7 @@ from data import bari2d, sts
 if __name__ == '__main__':
     random_seed = 10
     
-    # data_raw = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
+    data_raw = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
 
     torch.manual_seed(random_seed)
     np.random.seed(random_seed)
