@@ -28,28 +28,37 @@ from model import phenotyping
 
 
 
-def get_characteristics(data, phenotype, cat_feats, num_feats):
+def get_characteristics(data, phenotype, cat_feats, num_feats, name):
+
+    if name == 'STS':
+        data['Operative_mortality'] = data['mt30stat'] + data['mtdcstat'] >= 1
+        cat_feats += ['Operative_mortality']
+
     pd.set_option('display.max_rows', 500)
     assert(len(np.unique(phenotype) == 2))
-    
+
     num_characteristics = data[num_feats].groupby(phenotype).describe().T
     mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :].add_prefix('phenotype ')
-    ttest = data[num_feats].apply(lambda x: scipy.stats.ttest_ind(x[phenotype == 0].dropna(), x[phenotype == 1].dropna(), equal_var=False).pvalue, axis=0)
-    print('mean and std for numerical features:')
-    print(mean_std)
-    print('t-test for numerical features, p-values:')
-    print(ttest)
-    
+    ttest = data[num_feats].apply(lambda x: scipy.stats.ttest_ind(x[phenotype == 0].dropna(), x[phenotype == 1].dropna(), equal_var=False).pvalue, axis=0).rename('p-value')
+    mean_std.to_csv(f'characteristics/{name}_mean_std.csv')
+    ttest.to_csv(f'characteristics/{name}_ttest.csv')
+    # print('mean and std for numerical features:')
+    # print(mean_std)
+    # print('t-test for numerical features, p-values:')
+    # print(ttest)
+
     lst = [pd.crosstab(data[feat], phenotype) for feat in cat_feats]
     # same:
     # lst = [(data[feat].groupby(phenotype).value_counts()).unstack(level=0) for feat in cat_feats]
     counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value']).add_prefix('phenotype ')
-    chisq = counts.groupby('feature').apply(lambda x: scipy.stats.chi2_contingency(x).pvalue)
-    print('counts for categorical features:')
-    print(counts)
-    print('chi-squared test for categorical features, p-values:')
-    print(chisq)
-    
+    chisq = counts.groupby('feature').apply(lambda x: scipy.stats.chi2_contingency(x).pvalue).rename('p-value')
+    # print('counts for categorical features:')
+    # print(counts)
+    counts.to_csv(f'characteristics/{name}_counts.csv')
+    chisq.to_csv(f'characteristics/{name}_chisq.csv')
+    # print('chi-squared test for categorical features, p-values:')
+    # print(chisq)
+
     return
 
 
@@ -87,7 +96,7 @@ def bari2d():
     t = 'deathfu'
     outcome = outcome[[e, t]].rename(columns={e:'event', t:'time'})
     outcome['time'] /= 365.25
-    
+
     # Angina:
     # outcome = outcome[['dayvisit', 'angcls']].rename(columns={'dayvisit':'time', 'angcls':'event'})
     # outcome['event'][outcome['event'] != 3] = 0
@@ -108,15 +117,14 @@ def bari2d():
     # outcome_.loc[have_outcome.index] = have_outcome
     # outcome_ = outcome_.reset_index().set_index('id')
 
-    cat_feats = ['sex',
-                'race', 'hxmi', 'hxhtn',
-                # 'angcls6w', 'smkcat', 'ablvef', 'geographic_reg'
-                ]
-    num_feats = ['age', 'bmi', 
-                #  'dmdur'
-                 ]
+    # TODO: smkcat
+    dataset_raw['race'] = dataset_raw['race'] == 1
+    dataset_raw['smkcat'] = dataset_raw['smkcat'] != 0
+    cat_feats = ['hxchl', 'ablvef', 'hxetoh', 'hxmi', 'hxchf', 'hxhtn', 'sex',
+                 'smkcat', 'race', 'hispanic']
+    num_feats = ['screat', 'hba1c', 'bmi', 'age']
 
-    phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats], intervention.loc[outcome.index], 
+    phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats], intervention.loc[outcome.index],
                         cat_feats, num_feats, name='Bari2D')
 
     # checked that max # categories: 6
@@ -124,10 +132,29 @@ def bari2d():
     cat_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) <= 6]
     num_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) > 6]
     print('Bari2D characteristics:')
-    get_characteristics(dataset_raw.loc[outcome.index], phenotypes, cat_feats, num_feats)
+    get_characteristics(dataset_raw.loc[outcome.index], phenotypes, cat_feats, num_feats, name='Bari2D')
 
     return phenotypes, model
 
+
+"""
+BARI2D:                                 STS:
+
+Hxchl                                   dyslip
+Ablvef (for STS, you have absolute LVEF, need to make it boolean, with EF <50%)   "hdef" <50
+Screat                                  creatLst
+Hba1c                                   a1cLvl
+Hxetoh                                  alcohol
+Hxmi                                    prevmi
+Hxchf                                   chf
+Hxhtn                                   hypertn
+Bmi                                     bmi
+Sex                                     female
+Smkcat                                  recentishsmoker
+Race? (non-white vs white)              racecaucasian
+Hispanic?                               ethnicity
+Age                                     age
+"""
 
 
 def sts(model):
@@ -181,14 +208,11 @@ def sts(model):
     dataset['female'] += 1      # Female: 2, Male: 1
     dataset['prevmi'] = np.clip(dataset['prevmi'], 0, 1)
     dataset['hypertn'] = np.clip(dataset['hypertn'], 0, 1)
-    
-    cat_feats = ['female', 'racecaucasian', 'prevmi', 'hypertn', 
-                #  'CardSympTimeOfAdm', 'Recentishsmoker', 
-                # 'ablvef', 'geographic_reg'
-                ]
-    num_feats = ['age', 'bmi',
-                #  'dmdur'
-                ]
+    dataset['alcohol'] = dataset['alcohol'] > 0
+
+    cat_feats = ['dyslip', 'alcohol', 'prevmi', 'chf', 'hypertn', 'female',
+                 'recentishsmoker', 'racecaucasian', 'ethnicity']
+    num_feats = ['hdef', 'creatlst', 'a1clvl', 'bmi', 'age']
 
     phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS')
 
@@ -197,9 +221,10 @@ def sts(model):
     cat_feats = [c for c in dataset.columns if len(dataset[c].unique()) <= 6]
     num_feats = [c for c in dataset.columns if len(dataset[c].unique()) > 6]
     print('STS characteristics:')
-    get_characteristics(dataset, phenotypes, cat_feats, num_feats)
+    get_characteristics(dataset, phenotypes, cat_feats, num_feats, name='STS')
 
     return phenotypes, model
+
 
 
 def accord():
