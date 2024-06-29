@@ -119,13 +119,14 @@ def bari2d():
 
     # TODO: smkcat
     dataset_raw['race'] = dataset_raw['race'] == 1
-    dataset_raw['smkcat'] = dataset_raw['smkcat'] != 0
+    dataset_raw['smkcat'] = dataset_raw['smkcat'] == 2
     cat_feats = ['hxchl', 'ablvef', 'hxetoh', 'hxmi', 'hxchf', 'hxhtn', 'sex',
                  'smkcat', 'race', 'hispanic']
     num_feats = ['screat', 'hba1c', 'bmi', 'age']
 
-    phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats], intervention.loc[outcome.index],
-                        cat_feats, num_feats, name='Bari2D')
+    phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats],
+                                    intervention.loc[outcome.index],
+                                    cat_feats, num_feats, name='Bari2D')
 
     # checked that max # categories: 6
     # the features that need to be preprocessed (scaled, one-hot encoded)
@@ -209,10 +210,11 @@ def sts(model):
     dataset['prevmi'] = np.clip(dataset['prevmi'], 0, 1)
     dataset['hypertn'] = np.clip(dataset['hypertn'], 0, 1)
     dataset['alcohol'] = dataset['alcohol'] > 0
+    dataset['hdef'] = dataset['hdef'] < 50
 
-    cat_feats = ['dyslip', 'alcohol', 'prevmi', 'chf', 'hypertn', 'female',
+    cat_feats = ['dyslip', 'hdef', 'alcohol', 'prevmi', 'chf', 'hypertn', 'female',
                  'recentishsmoker', 'racecaucasian', 'ethnicity']
-    num_feats = ['hdef', 'creatlst', 'a1clvl', 'bmi', 'age']
+    num_feats = ['creatlst', 'a1clvl', 'bmi', 'age']
 
     phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS')
 

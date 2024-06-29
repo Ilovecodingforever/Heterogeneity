@@ -177,35 +177,15 @@ def find_max_treatment_effect_phenotype(g, zeta_probs, factual_outcomes):
     return np.nanargmax(mean_differential_survival)
 
 
-def plot_KM(phenotypes, outcomes, features, condition_names, condition, treatment=None, name=''):
+def plot_KM(phenotypes, outcomes, features, treatment=None, name=''):
     '''
     phenotypes: the phenotypes of the individuals
     outcomes: the outcomes dataframe
     features: the features dataframe
-    condition_names: dictionary of the feature used to stratify the KM curve
     treatment: the treatment column
-    condition: name of the feature used to stratify the KM curve
-    
     '''
 
     if treatment is None:
-        f, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(15, 10))
-        for j, c in enumerate(condition_names.keys()):
-            groups = pd.DataFrame({'phenotypes': phenotypes+1, 'condition': features[condition]}, index=outcomes.index)
-            d = groups[groups['condition'] == c]['phenotypes'].apply(lambda x: 'Phenotype ' + str(x))
-            # groups = groups.apply(lambda x: str(condition_names[x['condition']]) + ' Phenotype ' + str(x['phenotypes']), axis=1)
-            ax = plot_kaplanmeier(outcomes.loc[d.index], plot_counts=False, groups=d, ax=axs[j])
-
-            ax.set_title(condition_names[c])
-            ax.grid(True)
-
-        plt.suptitle(name + ' Kaplan-Meier curve')
-        plt.xlabel('Time to death (years)')
-        plt.ylabel('Survival probability')
-        # f.set_size_inches(14*2, 7*2)
-        plt.savefig(name+'_KM.png')
-        plt.close()
-
 
         f, ax = plt.subplots(1, figsize=(15, 10))
         groups = pd.DataFrame({'phenotypes': phenotypes+1}, index=outcomes.index)
@@ -221,26 +201,6 @@ def plot_KM(phenotypes, outcomes, features, condition_names, condition, treatmen
         plt.close()
         
         return
-
-
-    f, axs = plt.subplots(len(condition_names.keys()), len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
-
-    treatment = treatment.apply(lambda x: 'Treatment' if x == 1 else 'Control')
-
-    for i, p in enumerate(np.unique(phenotypes)):
-        for j, c in enumerate(condition_names.keys()):
-            d = outcomes.loc[features.index].loc[phenotypes==p]
-            ax = plot_kaplanmeier(d.loc[features[condition] == c], treatment.loc[features[condition] == c], plot_counts=False, ax=axs[j, i])
-
-            ax.set_xlabel('Time to death (years)')
-            ax.set_ylabel('Survival probability')
-            ax.set_title(condition_names[c] + ' Phenotype '+ str(i+1))
-            ax.grid(True)
-
-    plt.suptitle(name + ' Kaplan-Meier curve')
-    # f.set_size_inches(14*2, 7*2)
-    plt.savefig(name+'_KM.png')
-    plt.close()
 
 
     f, axs = plt.subplots(1, len(np.unique(phenotypes)), sharey=True, figsize=(15, 10))
@@ -275,9 +235,9 @@ def fit_CMHE(x, t, e, a):
     # ks = [1, 2, 3] # number of underlying base survival phenotypes
     # gs = [1, 2, 3] # number of underlying treatment effect phenotypes.
     # layerss = [[8, 8], [64, 64], [128, 128]] # number of neurons in each hidden layer.
-    ks = [1] # number of underlying base survival phenotypes
+    ks = [1, 2] # number of underlying base survival phenotypes
     gs = [2] # number of underlying treatment effect phenotypes.
-    layerss = [[50, 50]] # number of neurons in each hidden layer.
+    layerss = [[50, 50], [50]] # number of neurons in each hidden layer.
 
     iters = 100 # number of training epochs
     # learning_rate = 0.001
@@ -399,8 +359,7 @@ def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, mod
         phenotypes = predict_CMHE(model, x)
 
     # plot KM
-    plot_KM(phenotypes, outcomes, features, {2: 'Female', 1: 'Male'}, 
-            'female' if 'female' in cat_feats else 'sex',
+    plot_KM(phenotypes, outcomes, features, 
             treatment=treatment, name=name)
 
 
