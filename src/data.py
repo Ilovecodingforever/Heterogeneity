@@ -31,7 +31,7 @@ from model import phenotyping
 def get_characteristics(data, phenotype, cat_feats, num_feats, name):
 
     if name == 'STS':
-        data['Operative_mortality'] = data['mt30stat'] + data['mtdcstat'] >= 1
+        data['Operative_mortality'] = (data['mt30stat'] == 2) | (data['mtdcstat'] == 2)
         cat_feats += ['Operative_mortality']
 
     pd.set_option('display.max_rows', 500)

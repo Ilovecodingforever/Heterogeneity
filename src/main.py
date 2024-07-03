@@ -60,14 +60,33 @@ from data import bari2d, sts
 
 
 
+random_seed = 10
+
+torch.manual_seed(random_seed)
+np.random.seed(random_seed)
+
+import random, os
+import numpy as np
+import torch
+
+random.seed(random_seed)
+os.environ['PYTHONHASHSEED'] = str(random_seed)
+np.random.seed(random_seed)
+torch.manual_seed(random_seed)
+torch.cuda.manual_seed(random_seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True    
+
 
 if __name__ == '__main__':
-    random_seed = 10
-
-    torch.manual_seed(random_seed)
-    np.random.seed(random_seed)
-
+    
+    
+    # df = pd.read_csv('Bari2D_phenotypes.csv')
+    
     bari2d_phenotypes, model = bari2d()
+    
+    # torch.save(model, 'model.pth')
+    
     sts_phenotypes, model = sts(model)
 
     print()
