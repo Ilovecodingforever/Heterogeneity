@@ -239,6 +239,10 @@ def fit_CMHE(x, t, e, a):
     gs = [2] # number of underlying treatment effect phenotypes.
     layerss = [[50, 50], [50]] # number of neurons in each hidden layer.
 
+    # ks = [1, 2, 3] # number of underlying base survival phenotypes
+    # gs = [2] # number of underlying treatment effect phenotypes.
+    # layerss = [[8, 8], [64, 64], [128, 128]] # number of neurons in each hidden layer.
+
     iters = 100 # number of training epochs
     # learning_rate = 0.001
     learning_rate = 0.01

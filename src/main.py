@@ -80,80 +80,15 @@ torch.backends.cudnn.benchmark = True
 
 if __name__ == '__main__':
     
-    
-    # df = pd.read_csv('Bari2D_phenotypes.csv')
-    
+    # outcome = 'mortality'
+    # outcome = 'mace'
     bari2d_phenotypes, model = bari2d()
-    
-    # torch.save(model, 'model.pth')
     
     sts_phenotypes, model = sts(model)
 
     print()
 
 
-
-
-
-
-# dict = pd.read_csv('/zfsauton2/home/mingzhul/Heterogeneity/STS_preprocessing_files/que_DataDictionary.csv', encoding='latin1')
-# not_found = []
-# for i in range(len(data.columns)):
-#     if data.columns[i].lower() not in dict['Group Of ShortName'].str.lower().values:
-#         not_found.append(data.columns[i])
-
-
-
-# def d():
-#     data_raw_sts = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
-
-#     directory = '/zfsauton/project/public/chiragn/counterfactual_phenotyping/datasets'
-
-#     data_dir = 'BARI2D/data'
-
-#     data_file = 'bari2d_bl.sas7bdat'
-#     outcome_file = 'bari2d_endpts.sas7bdat'
-#     # outcome_file = 'bari2d_long.sas7bdat'
-
-#     data_path = os.path.join(directory, data_dir, data_file)
-#     outcome_path = os.path.join(directory, data_dir, outcome_file)
-
-#     dataset_raw_bari2d = pd.read_sas(data_path).set_index('id')
-#     outcome = pd.read_sas(outcome_path).set_index('id')
-
-#     # intervention = dataset_raw['cardtrt'].rename('intervention')
-
-
-#     dataset_raw_bari2d['race'] = dataset_raw_bari2d['race'] == 1
-#     dataset_raw_bari2d['smkcat'] = dataset_raw_bari2d['smkcat'] != 0
-#     d_bari2d = dataset_raw_bari2d[['hxchl', 'ablvef', 'screat', 'hba1c', 'hxetoh', 'hxmi', 'hxchf', 'hxhtn', 'bmi', 'sex', 'smkcat', 'race', 'hispanic', 'age']]
-#     for c in d_bari2d.columns:
-#         print(c, d_bari2d[c].unique())
-
-
-#     cat = ['hxchl', 'ablvef', 'hxetoh', 'hxmi', 'hxchf', 'hxhtn', 'sex', 'smkcat', 'race', 'hispanic']
-#     num = ['screat', 'hba1c', 'bmi', 'age']
-
-#     data_raw_sts['female'] += 1      # Female: 2, Male: 1
-#     data_raw_sts['prevmi'] = np.clip(data_raw_sts['prevmi'], 0, 1)
-#     data_raw_sts['hypertn'] = np.clip(data_raw_sts['hypertn'], 0, 1)
-#     data_raw_sts['alcohol'] = data_raw_sts['alcohol'] > 0
-#     d_sts = data_raw_sts[['dyslip', 'creatlst', 'a1clvl', 'alcohol', 'prevmi', 'chf', 'hypertn', 'bmi', 'female', 'recentishsmoker', 'racecaucasian', 'ethnicity', 'age']]
-#     d_sts['ablvef'] = data_raw_sts['hdef'] < 50
-
-#     for c in d_sts.columns:
-#         print(c, d_sts[c].unique())
-
-#     cat = ['dyslip', 'alcohol', 'prevmi', 'chf', 'hypertn', 'female', 'recentishsmoker', 'racecaucasian', 'ethnicity']
-#     num = ['hdef', 'creatlst', 'a1clvl', 'bmi', 'age']
-
-
-
-
-    # alcohol
-    # female
-    # recentishsmoker
-    # race
 
 
 
