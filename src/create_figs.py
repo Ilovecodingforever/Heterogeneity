@@ -6,7 +6,8 @@ from matplotlib_venn import venn2
 
 
 def venn_diagram(save=True):
-    
+    plt.rcdefaults() 
+
     # Import STS data
     data = pd.read_csv('./src/STS_preprocessing_files/timetoevent_cabg.csv', index_col='ID')
 
@@ -36,9 +37,10 @@ def venn_diagram(save=True):
     if save:
         plt.tight_layout()
         plt.savefig('./src/figures/STS_macce_mort_venn.png', dpi=600)
-    plt.clf()
+    plt.close()
 
 def histogram(save=True):
+    plt.rcdefaults() 
 
     # Import STS data
     data = pd.read_csv('./src/STS_preprocessing_files/timetoevent_cabg.csv', index_col='ID')
@@ -119,19 +121,19 @@ def histogram(save=True):
         # Save the plot
         plt.tight_layout()
         plt.savefig('./src/figures/sts_histogram.png', dpi=600)
-    plt.clf()
+    plt.close()
 
 
 from model import plot_kaplanmeier
 from lifelines import KaplanMeierFitter
 from lifelines.plotting import add_at_risk_counts
-import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 from lifelines.statistics import logrank_test
 from lifelines import CoxPHFitter
 from auton_survival.preprocessing import Preprocessor
 
 def km_curves(outcome = 'mortality', save=True):
+    plt.rcdefaults()
 
     if outcome == 'macce':
         # Major adverse cardiac or cerebrovascular event (MACCE)
@@ -246,7 +248,7 @@ def km_curves(outcome = 'mortality', save=True):
 
     
     def plot_kaplanmeier(outcomes, groups=None, plot_counts=False, title=None, color='blue', ylabel=False, label=None, **kwargs):
-
+        plt.rcdefaults()
         plt.style.use('seaborn-v0_8-whitegrid')
         plt.rcParams['font.family'] = 'serif'
         
@@ -343,7 +345,6 @@ def km_curves(outcome = 'mortality', save=True):
                 ax2.grid(False)
             
         plt.title(title, fontsize=26)    
-            
         if ylabel:
             if outcome == 'macce':
                 ax.set_ylabel('Freedom from MACCE', fontsize=26)
@@ -395,7 +396,8 @@ def km_curves(outcome = 'mortality', save=True):
     #plt.text(2.6, 0.65, 'HR: '+p3_hr_txt, fontsize=22, color='black', ha='center')
 
     ax2.set_xlabel('')
-
+    ax2.tick_params(labelleft=False)
+    
     ax1.get_legend().remove()
     ax2.get_legend().remove()
     lines_labels = [ax.get_legend_handles_labels() for ax in [ax1, ax2]]
@@ -438,10 +440,11 @@ def km_curves(outcome = 'mortality', save=True):
     lines, labels = [sum(lol, []) for lol in zip(*lines_labels)]
     ax3.legend(lines[:2], labels, loc='lower left', fontsize=26, frameon=True)
 
+    plt.tick_params(labelleft = False, left=False)    
     plt.tight_layout()
     # plt.show()
     plt.savefig(f'./src/figures/kaplan_meier_curves_{outcome}.png', dpi=600)
-    plt.clf()
+    plt.close()
 
 
 
