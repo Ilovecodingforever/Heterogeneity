@@ -285,10 +285,17 @@ def fit_CMHE(x, t, e, a):
     print(f'Best Params: {best_params}')
     k, g, layers = best_params
     model = DeepCoxMixturesHeterogenousEffects(random_seed=10, k=k, g=g, layers=layers)
+
+    ### To train on training data only, excluding validation data
     model = model.fit(x_tr, t_tr, e_tr, a_tr, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
                     learning_rate=learning_rate, batch_size=batch_size,
                     optimizer=optimizer, patience=patience)
-    print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
+
+    #### To train a final model using all data (test data is on STS data)
+    # model = model.fit(x, t, e, a, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
+    #                 learning_rate=learning_rate, batch_size=batch_size,
+    #                 optimizer=optimizer, patience=patience)
+    # print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
 
     zeta_train = predict_CMHE(model, x)
     
@@ -330,7 +337,7 @@ def plot_tree(features, phenotypes, name='', preprocessor=None):
 
 
 
-def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, model=None, name=''):
+def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, model=None, name='', oc=''):
 
     '''
     outcomes_raw: the outcomes dataframe
@@ -373,7 +380,7 @@ def phenotyping(outcomes_raw, features_raw, treatment, cat_feats, num_feats, mod
     if treatment is not None:
         out_data = out_data.join(treatment)
     
-    out_data.to_csv(name+'_phenotypes.csv')
+    out_data.to_csv(f'./characteristics/{name}_phenotypes_{oc}.csv')
 
 
     # plot tree

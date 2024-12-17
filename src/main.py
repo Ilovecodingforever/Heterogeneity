@@ -57,7 +57,7 @@ from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
 
 from data import bari2d, sts
-
+from create_figs import venn_diagram, histogram, km_curves
 
 
 random_seed = 10
@@ -80,12 +80,30 @@ torch.backends.cudnn.benchmark = True
 
 if __name__ == '__main__':
     
-    # outcome = 'mortality'
-    # outcome = 'mace'
-    bari2d_phenotypes, model = bari2d()
-    
-    sts_phenotypes, model = sts(model)
+    try: 
+        if sys.argv[1] == 'macce':
+            outcomes = ['macce']
+        elif sys.argv[1] == 'both':
+            outcomes = ['mortality', 'macce']
+        else:
+            outcomes = ['mortality']
+    except IndexError:
+        outcomes = ['mortality']
 
+    for oc in outcomes:
+        print ('Outcome being evaluated is: ' + oc)
+        bari2d_phenotypes, model = bari2d(oc)
+        
+        sts_phenotypes, model = sts(model, oc)
+
+        # create KM curves
+        print(f'Saving KM curve for {oc}')
+        km_curves(outcome = oc, save=True)
+
+    # additional figures for publication
+    print('Saving venn diagram and histogram figures')
+    venn_diagram(save=True)
+    histogram(save=True)
     print()
 
 

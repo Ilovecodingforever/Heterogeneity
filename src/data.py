@@ -28,7 +28,7 @@ from model import phenotyping
 
 
 
-def get_characteristics(data, phenotype, cat_feats, num_feats, name):
+def get_characteristics(data, phenotype, cat_feats, num_feats, name, oc=''):
 
     if name == 'STS':
         data['Operative_mortality'] = (data['mt30stat'] == 2) | (data['mtdcstat'] == 2)
@@ -38,10 +38,10 @@ def get_characteristics(data, phenotype, cat_feats, num_feats, name):
     assert(len(np.unique(phenotype) == 2))
 
     num_characteristics = data[num_feats].groupby(phenotype).describe().T
-    mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :].add_prefix('phenotype ')
+    mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :].add_prefix('phenotype_')
     ttest = data[num_feats].apply(lambda x: scipy.stats.ttest_ind(x[phenotype == 0].dropna(), x[phenotype == 1].dropna(), equal_var=False).pvalue, axis=0).rename('p-value')
-    mean_std.to_csv(f'characteristics/{name}_mean_std.csv')
-    ttest.to_csv(f'characteristics/{name}_ttest.csv')
+    mean_std.to_csv(f'./characteristics/{name}_mean_std_{oc}.csv')
+    ttest.to_csv(f'./characteristics/{name}_ttest_{oc}.csv')
     # print('mean and std for numerical features:')
     # print(mean_std)
     # print('t-test for numerical features, p-values:')
@@ -50,21 +50,47 @@ def get_characteristics(data, phenotype, cat_feats, num_feats, name):
     lst = [pd.crosstab(data[feat], phenotype) for feat in cat_feats]
     # same:
     # lst = [(data[feat].groupby(phenotype).value_counts()).unstack(level=0) for feat in cat_feats]
-    counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value']).add_prefix('phenotype ')
+    counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value']).add_prefix('phenotype_')
     chisq = counts.groupby('feature').apply(lambda x: scipy.stats.chi2_contingency(x).pvalue).rename('p-value')
     # print('counts for categorical features:')
     # print(counts)
-    counts.to_csv(f'characteristics/{name}_counts.csv')
-    chisq.to_csv(f'characteristics/{name}_chisq.csv')
+
+    counts.to_csv(f'./characteristics/{name}_counts_{oc}.csv')
+    chisq.to_csv(f'./characteristics/{name}_chisq_{oc}.csv')
     # print('chi-squared test for categorical features, p-values:')
     # print(chisq)
+
+    ### Keith added to make table easier to use
+
+    # Create numerical table for use in manuscript
+    num_table = ttest.copy()
+    mean_std.reset_index(level=1, inplace=True)
+    mean = mean_std.loc[mean_std.iloc[:,0] == 'mean']
+    mean = mean.drop(columns = mean.columns[0])
+    mean.columns = mean.columns + '_mean'
+    std = mean_std.loc[mean_std.iloc[:,0] == 'std']
+    std = std.drop(columns = std.columns[0])
+    std.columns = std.columns + '_std'
+    num_table = pd.concat([num_table, mean, std], axis=1)
+    num_table.index.name = 'feature'
+    num_table.to_csv(f'./characteristics/{name}_num_table_{oc}.csv')
+
+    # Create categorical table for use in manuscript
+    cat_table = counts.copy().reset_index(level=1)
+    cat_table['total'] = cat_table['phenotype_0'] + cat_table['phenotype_1']
+    cat_table['percent'] = 100 * cat_table['phenotype_1'] / cat_table['total']
+    cat_table['p-value'] = cat_table.index
+    cat_table['p-value'] = cat_table['p-value'].map(chisq).fillna(cat_table['p-value'])
+    cat_table.sort_index(inplace=True)
+    cat_table.to_csv(f'./characteristics/{name}_cat_table_{oc}.csv')
+    ### end ###
 
     return
 
 
 
 
-def bari2d():
+def bari2d(oc = 'mortality'):
     # https://www.sciencedirect.com/science/article/pii/S0735109713007961
     # Angina worked?
 
@@ -94,9 +120,15 @@ def bari2d():
     # 1 male, 2 female
     # sex.loc[sex['sex'] == 2, 'sex'] = 'Female'
     # sex.loc[sex['sex'] == 1, 'sex'] = 'Male'
-
-    e ='death'
-    t = 'deathfu'
+    if oc == 'mortality':
+        e ='death'
+        t = 'deathfu'
+    elif oc == 'macce':
+        e = 'dthmistr'
+        t = 'dthmistrfu'
+    else: 
+        raise ValueError('Patient event oucome not recorded properly, please select "mortality" or "macce".')
+    
     outcome = outcome[[e, t]].rename(columns={e:'event', t:'time'})
     outcome['time'] /= 365.25
 
@@ -129,14 +161,13 @@ def bari2d():
 
     phenotypes, model = phenotyping(outcome, dataset_raw.loc[outcome.index][cat_feats + num_feats],
                                     intervention.loc[outcome.index],
-                                    cat_feats, num_feats, name='Bari2D')
+                                    cat_feats, num_feats, name='Bari2D', oc=oc)
 
     # checked that max # categories: 6
     # the features that need to be preprocessed (scaled, one-hot encoded)
     cat_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) <= 6]
     num_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) > 6]
-    print('Bari2D characteristics:')
-    get_characteristics(dataset_raw.loc[outcome.index], phenotypes, cat_feats, num_feats, name='Bari2D')
+    get_characteristics(dataset_raw.loc[outcome.index], phenotypes, cat_feats, num_feats, name='Bari2D', oc=oc)
 
     return phenotypes, model
 
@@ -161,7 +192,7 @@ Age                                     age
 """
 
 
-def sts(model=None, outcome='mortality'):
+def sts(model=None, oc='mortality'):
     data_raw = pd.read_csv('src/STS_preprocessing_files/timetoevent_cabg.csv')
     data = data_raw.copy()
 
@@ -200,10 +231,9 @@ def sts(model=None, outcome='mortality'):
     outcome = data[['ID'] + outcome_names].set_index('ID')
 
     # get an outcome
-    # outcome_idx = 0
-    if outcome == 'mortality':
+    if oc == 'mortality':
         outcome_idx = 0
-    elif outcome == 'mace':
+    elif oc == 'macce':
         # MACCEFlag, MACCEReadmitDays
         outcome_idx = 12
     else:
@@ -231,14 +261,14 @@ def sts(model=None, outcome='mortality'):
         return
 
 
-    phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS')
+    phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS', oc = oc)
 
     # checked that max # categories: 6
     # the features that need to be preprocessed (scaled, one-hot encoded)
     cat_feats = [c for c in dataset.columns if len(dataset[c].unique()) <= 6]
     num_feats = [c for c in dataset.columns if len(dataset[c].unique()) > 6]
     print('STS characteristics:')
-    get_characteristics(dataset, phenotypes, cat_feats, num_feats, name='STS')
+    get_characteristics(dataset, phenotypes, cat_feats, num_feats, name='STS', oc=oc)
 
     return phenotypes, model
 
