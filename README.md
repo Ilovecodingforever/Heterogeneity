@@ -7,3 +7,5 @@
 3. Just run src/main.py (default event/outcome is mortality)
 
 4. If you want to evaluate macce, instead run src/main.py macce
+
+5. If you want to evaluate both, instead run src/main.py both
