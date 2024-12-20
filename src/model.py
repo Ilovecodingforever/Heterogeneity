@@ -295,7 +295,8 @@ def fit_CMHE(x, t, e, a):
     # model = model.fit(x, t, e, a, vsize=vsize, val_data=(x_vl, t_vl, e_vl, a_vl), iters=iters,
     #                 learning_rate=learning_rate, batch_size=batch_size,
     #                 optimizer=optimizer, patience=patience)
-    # print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
+    
+    print(f'Treatment Effect for the {g} groups: {model.torch_model[0].omega.detach()}')
 
     zeta_train = predict_CMHE(model, x)
     

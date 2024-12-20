@@ -20,19 +20,19 @@ def venn_diagram(save=True):
     macce_df = pd.concat([data, macce_ptype_data], axis=1, join='inner')
 
     # Create venn-diagram sets
-    # Venn-diagram phenotypes = 1
+    # Venn-diagram phenotypes = 2 (No benefit)
     mort_set_one = set(df.index[df['phenotypes']==1])
     mace_set_one = set(macce_df.index[macce_df['phenotypes']==1])
     plt.subplot(1,2,1)
     venn2([mace_set_one, mort_set_one], ('MACCE', 'MORT'))
-    plt.title('Phenogroup = 1 (CABG benefit)')
+    plt.title('Phenogroup = 2 (No benefit)')
 
-    # Venn-diagram phenotypes = 0
+    # Venn-diagram phenotypes = 1 (CABG benefit)
     mort_set_z = set(df.index[df['phenotypes']==0])
     mace_set_z = set(macce_df.index[macce_df['phenotypes']==0])
     plt.subplot(1,2,2)
     venn2([mace_set_z, mort_set_z], ('MACCE', 'MORT'))
-    plt.title('Phenogroup = 0 (no benefit)')
+    plt.title('Phenogroup = 1 (CABG benefit)')
 
     if save:
         plt.tight_layout()
@@ -62,9 +62,9 @@ def histogram(save=True):
     
     
     # Add labels and title
-    plt.xlabel('STS Predicated Mortality (%)')
+    plt.xlabel('STS Predicted Mortality (%)')
     plt.ylabel('Frequency')
-    plt.title('Phenotype = 0 (no benefit)')
+    plt.title('Phenotype = 1 (CABG benefit)')
 
 
     plt.subplot(2, 2, 2) 
@@ -77,9 +77,9 @@ def histogram(save=True):
     plt.text(10*0.5,top*0.8,'median: '+str(round(med, 2))+'%')
     
     # Add labels and title
-    plt.xlabel('STS Predicated Mortality (%)')
+    plt.xlabel('STS Predicted Mortality (%)')
     plt.ylabel('Frequency')
-    plt.title('Phenotype = 1 (CABG benefit)')
+    plt.title('Phenotype = 2 (No benefit)')
 
     ### MACCE ###
     # Import MACCE data
@@ -97,9 +97,9 @@ def histogram(save=True):
     plt.text(50*0.5,top*0.8,'median: '+str(round(med, 2))+'%')
 
     # Add labels and title
-    plt.xlabel('STS Predicated MM (%)')
+    plt.xlabel('STS Predicted MM (%)')
     plt.ylabel('Frequency')
-    plt.title('Phenotype = 0 (no benefit)')
+    plt.title('Phenotype = 1 (CABG benefit)')
 
 
     plt.subplot(2, 2, 4) 
@@ -113,9 +113,9 @@ def histogram(save=True):
     
 
     # Add labels and title
-    plt.xlabel('STS Predicated MM (%)')
+    plt.xlabel('STS Predicted MM (%)')
     plt.ylabel('Frequency')
-    plt.title('Phenotype = 1 (CABG benefit)')
+    plt.title('Phenotype = 2 (No benefit)')
 
     if save:
         # Save the plot
@@ -321,7 +321,7 @@ def km_curves(outcome = 'mortality', save=True):
                 ax.set_ylim([0.48, 1])
             ax.tick_params(axis="y", labelsize=26)
             ax.tick_params(axis="x", labelsize=26)
-            
+
             # By default, we use the at-risk count from the end of the period. 
             if plot_counts[0]:
                 xticks = np.array([0., 2., 4., 6., 8., 10., 11.])
@@ -397,7 +397,9 @@ def km_curves(outcome = 'mortality', save=True):
 
     ax2.set_xlabel('')
     ax2.tick_params(labelleft=False)
-    
+    ax1.tick_params(bottom=False)
+
+
     ax1.get_legend().remove()
     ax2.get_legend().remove()
     lines_labels = [ax.get_legend_handles_labels() for ax in [ax1, ax2]]
