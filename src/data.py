@@ -28,6 +28,143 @@ from model import phenotyping
 
 
 
+
+
+
+
+
+def bari2d_sts_characteristics(bari2d_data, sts_data, ):
+
+    '''
+    name, bari2d, sts:
+
+    Congestive heart failure, hxchf, chf,
+    ejection fraction < 50%, ablvef,  hdef,
+    Hispanic, hispanic, ethnicity,
+    Hyperlipedemia, hxchl, dyslip,
+    Hypertension, hxhtn, hypertn,
+    Myocardial infarction, hxmi,    prevmi,
+    Race (white), race, racecaucasian,
+    Recent alcohol use, hxetoh, alcohol,
+    Recent smoker, smkcat,  recentishsmoker,
+    Sex (female), sex,   female,
+
+    Age (years), age, age
+    Body mass index, bmi, bmi
+    Creatinine (mg/dL), screat, creatLst
+    Hemoglobin A1c (%), hba1c , a1cLvl
+    sts predicted mortality
+    operative mortality
+    '''
+
+    bari2d_data['data'] = 'Bari2d'
+    sts_data['data'] = 'STS'
+
+    sts_data['Operative_mortality'] = (sts_data['mt30stat'] == 2) | (sts_data['mtdcstat'] == 2)
+
+    # rename columns to descriptive names
+    bari2d_data.rename(columns = {'hxchf': 'Congestive heart failure',
+                                    'ablvef': 'Ejection fraction < 50%',
+                                    'hispanic': 'Hispanic',
+                                    'hxchl': 'Hyperlipedemia',
+                                    'hxhtn': 'Hypertension',
+                                    'hxmi': 'Myocardial infarction',
+                                    'race': 'Race (white)',
+                                    'hxetoh': 'Recent alcohol use',
+                                    'smkcat': 'Recent smoker',
+                                    'sex': 'Sex (female)',
+                                    'age': 'Age (years)',
+                                    'bmi': 'Body mass index',
+                                    'screat': 'Creatinine (mg/dL)',
+                                    'hba1c': 'Hemoglobin A1c (%)',}, inplace = True)
+    # rename columns to descriptive names
+    sts_data.rename(columns = {'chf': 'Congestive heart failure',
+                                    'hdef': 'Ejection fraction < 50%',
+                                    'ethnicity': 'Hispanic',
+                                    'dyslip': 'Hyperlipedemia',
+                                    'hypertn': 'Hypertension',
+                                    'prevmi': 'Myocardial infarction',
+                                    'racecaucasian': 'Race (white)',
+                                    'alcohol': 'Recent alcohol use',
+                                    'recentishsmoker': 'Recent smoker',
+                                    'female': 'Sex (female)',
+                                    'age': 'Age (years)',
+                                    'bmi': 'Body mass index',
+                                    'creatlst': 'Creatinine (mg/dL)',
+                                    'a1clvl': 'Hemoglobin A1c (%)',}, inplace = True)
+    # combine data
+    cat_feats= ['Congestive heart failure',
+                'Ejection fraction < 50%',
+                'Hispanic',
+                'Hyperlipedemia',
+                'Hypertension',
+                'Myocardial infarction',
+                'Race (white)',
+                'Recent alcohol use',
+                'Recent smoker',
+                'Sex (female)',]
+    num_feats = ['Age (years)',
+                'Body mass index',
+                'Creatinine (mg/dL)',
+                'Hemoglobin A1c (%)',]
+    data = pd.concat([bari2d_data[num_feats+cat_feats+['data']],
+                      sts_data[num_feats+cat_feats+['data']]], axis = 0).set_index('data', append = True)
+
+    pd.set_option('display.max_rows', 500)
+
+    num_characteristics = data[num_feats].groupby('data').describe().T
+    mean_std = num_characteristics.loc[(slice(None), ['mean', 'std']), :]
+    ttest = data[num_feats].apply(lambda x: scipy.stats.ttest_ind(x.xs('Bari2d', level=1, drop_level=False).dropna(),
+                                                                  x.xs('STS', level=1, drop_level=False).dropna(),
+                                                                  equal_var=False).pvalue, axis=0).rename('p-value')
+
+    lst = [pd.crosstab(data[feat], data.index.get_level_values(1)) for feat in cat_feats]
+    counts = pd.concat(lst, keys=cat_feats, names=['feature', 'value'])
+    chisq = counts.groupby('feature').apply(lambda x: scipy.stats.chi2_contingency(x).pvalue).rename('p-value')
+
+    # Create numerical table for use in manuscript
+    num_table = ttest.copy()
+    mean_std.reset_index(level=1, inplace=True)
+    mean = mean_std.loc[mean_std.iloc[:,0] == 'mean']
+    mean = mean.drop(columns = mean.columns[0])
+    mean.columns = mean.columns + '_mean'
+    std = mean_std.loc[mean_std.iloc[:,0] == 'std']
+    std = std.drop(columns = std.columns[0])
+    std.columns = std.columns + '_std'
+    num_table = pd.concat([num_table, mean, std], axis=1)
+    num_table.index.name = 'feature'
+
+    # add predicted mortality
+    pred_mort = sts_data['PREDMORT']
+    row = pd.Series({'STS_mean': pred_mort.mean(),
+                     'STS_std': pred_mort.std(),
+    }, name='STS predicted mortality')
+    num_table = num_table.append(row)
+
+    num_table.to_csv(f'./characteristics/Bari2d_STS_num_table.csv')
+
+    # Create categorical table for use in manuscript
+    cat_table = counts.copy().reset_index(level=1)
+    cat_table['total (Bari2d + STS)'] = cat_table['Bari2d'] + cat_table['STS']
+    cat_table['percent (STS / (Bari2d + STS))'] = 100 * cat_table['STS'] / cat_table['total (Bari2d + STS)']
+    cat_table['p-value'] = cat_table.index
+    cat_table['p-value'] = cat_table['p-value'].map(chisq).fillna(cat_table['p-value'])
+    cat_table.sort_index(inplace=True)
+
+    # add STS Operative mortality
+    row = pd.Series({'value': 0,
+                     'STS': len(sts_data['Operative_mortality'].dropna()) - sts_data['Operative_mortality'].sum(),
+                     }, name='Operative mortality')
+    cat_table = cat_table.append(row)
+    row = pd.Series({'value': 1,
+                        'STS': sts_data['Operative_mortality'].sum(),
+                        }, name='Operative mortality')
+    cat_table = cat_table.append(row)
+
+    cat_table.to_csv(f'./characteristics/Bari2d_STS_cat_table.csv')
+    ### end ###
+
+
 def get_characteristics(data, phenotype, cat_feats, num_feats, name, oc=''):
 
     if name == 'STS':
@@ -126,9 +263,9 @@ def bari2d(oc = 'mortality'):
     elif oc == 'macce':
         e = 'dthmistr'
         t = 'dthmistrfu'
-    else: 
+    else:
         raise ValueError('Patient event oucome not recorded properly, please select "mortality" or "macce".')
-    
+
     outcome = outcome[[e, t]].rename(columns={e:'event', t:'time'})
     outcome['time'] /= 365.25
 
@@ -155,6 +292,10 @@ def bari2d(oc = 'mortality'):
     # TODO: smkcat
     dataset_raw['race'] = dataset_raw['race'] == 1
     dataset_raw['smkcat'] = dataset_raw['smkcat'] == 2
+
+    dataset_raw['ablvef'] = dataset_raw['ablvef'] == 1
+    dataset_raw['hxetoh'] = dataset_raw['hxetoh'] == 1
+
     cat_feats = ['hxchl', 'ablvef', 'hxetoh', 'hxmi', 'hxchf', 'hxhtn', 'sex',
                  'smkcat', 'race', 'hispanic']
     num_feats = ['screat', 'hba1c', 'bmi', 'age']
@@ -169,27 +310,8 @@ def bari2d(oc = 'mortality'):
     num_feats = [c for c in dataset_raw.columns if len(dataset_raw[c].unique()) > 6]
     get_characteristics(dataset_raw.loc[outcome.index], phenotypes, cat_feats, num_feats, name='Bari2D', oc=oc)
 
-    return phenotypes, model
+    return phenotypes, model, dataset_raw.loc[outcome.index]
 
-
-"""
-BARI2D:                                 STS:
-
-Hxchl                                   dyslip
-Ablvef (for STS, you have absolute LVEF, need to make it boolean, with EF <50%)   "hdef" <50
-Screat                                  creatLst
-Hba1c                                   a1cLvl
-Hxetoh                                  alcohol
-Hxmi                                    prevmi
-Hxchf                                   chf
-Hxhtn                                   hypertn
-Bmi                                     bmi
-Sex                                     female
-Smkcat                                  recentishsmoker
-Race? (non-white vs white)              racecaucasian
-Hispanic?                               ethnicity
-Age                                     age
-"""
 
 
 def sts(model=None, oc='mortality'):
@@ -238,7 +360,7 @@ def sts(model=None, oc='mortality'):
         outcome_idx = 12
     else:
         raise ValueError('Invalid outcome')
-    
+
     outcome = outcome[[outcome_names[outcome_idx*2], outcome_names[outcome_idx*2+1]]].rename(
         columns={outcome_names[outcome_idx*2]: 'event',
                  outcome_names[outcome_idx*2+1]: 'time'})
@@ -252,14 +374,15 @@ def sts(model=None, oc='mortality'):
     dataset['hypertn'] = np.clip(dataset['hypertn'], 0, 1)
     dataset['alcohol'] = dataset['alcohol'] > 0
     dataset['hdef'] = dataset['hdef'] < 50
+    dataset['recentishsmoker'] = dataset['recentishsmoker'] == 1
+    dataset['racecaucasian'] = dataset['racecaucasian'] == 1
 
     cat_feats = ['dyslip', 'hdef', 'alcohol', 'prevmi', 'chf', 'hypertn', 'female',
                  'recentishsmoker', 'racecaucasian', 'ethnicity']
     num_feats = ['creatlst', 'a1clvl', 'bmi', 'age']
 
-    if model is None: 
+    if model is None:
         return
-
 
     phenotypes, model = phenotyping(outcome, dataset[cat_feats+num_feats], None, cat_feats, num_feats, model, name='STS', oc = oc)
 
@@ -270,6 +393,6 @@ def sts(model=None, oc='mortality'):
     print('STS characteristics:')
     get_characteristics(dataset, phenotypes, cat_feats, num_feats, name='STS', oc=oc)
 
-    return phenotypes, model
+    return phenotypes, model, dataset
 
 

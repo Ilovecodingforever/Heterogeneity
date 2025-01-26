@@ -1,34 +1,3 @@
-"""
-Not found:
-Priorrev
-Priorstent                              StentPrsnt
-Hxcva                                   StrokeFlag(?), CNStrokP
-
-
-
-
-BARI2D:                                 STS:
-
-Hxchl                                   dyslip
-Ablvef (for STS, you have absolute LVEF, need to make it boolean, with EF <50%)   "hdef" <50
-Screat                                  creatLst
-Hba1c                                   a1cLvl
-Hxetoh                                  alcohol
-Hxmi                                    prevmi
-Hxchf                                   chf
-Hxhtn                                   hypertn
-Bmi                                     bmi
-Sex                                     female
-Smkcat                                  recentishsmoker
-Race? (non-white vs white)              racecaucasian
-Hispanic?                               ethnicity
-Age                                     age
-"""
-
-
-# pd.set_option('display.max_rows', 500)
-# pd.set_option('display.max_columns', 500)
-# pd.set_option('display.width', 1000)
 import os
 import sys
 import copy
@@ -56,7 +25,7 @@ from auton_survival.models.cmhe import DeepCoxMixturesHeterogenousEffects
 
 
 
-from data import bari2d, sts
+from data import bari2d, sts, bari2d_sts_characteristics
 from create_figs import venn_diagram, histogram, km_curves
 
 
@@ -92,42 +61,20 @@ if __name__ == '__main__':
 
     for oc in outcomes:
         print ('Outcome being evaluated is: ' + oc)
-        bari2d_phenotypes, model = bari2d(oc)
+        bari2d_phenotypes, model, bari2d_data = bari2d(oc)
         
-        sts_phenotypes, model = sts(model, oc)
+        sts_phenotypes, model, sts_data = sts(model, oc)
 
         # create KM curves
         print(f'Saving KM curve for {oc}')
         km_curves(outcome = oc, save=True)
+
+    # bari2d_sts_characteristics(bari2d_data, sts_data)
 
     # additional figures for publication
     print('Saving venn diagram and histogram figures')
     venn_diagram(save=True)
     histogram(save=True)
     print()
-
-
-
-
-
-"""
-BARI2D:                                 STS:
-
-Hxchl                                   dyslip
-Ablvef (for STS, you have absolute LVEF, need to make it boolean, with EF <50%)   "hdef" <50
-Screat                                  creatLst
-Hba1c                                   a1cLvl
-Hxetoh                                  alcohol
-Hxmi                                    prevmi
-Hxchf                                   chf
-Hxhtn                                   hypertn
-Bmi                                     bmi
-Sex                                     female
-Smkcat                                  recentishsmoker
-Race? (non-white vs white)              racecaucasian
-Hispanic?                               ethnicity
-Age                                     age
-"""
-
 
 
