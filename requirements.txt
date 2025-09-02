@@ -2,7 +2,7 @@ auton-survival==0.1.0
 pandas==1.5.3
 numpy==1.26.4
 scikit-survival==0.21.0
-torch==2.2.0
+torch==2.7.1-rc1
 lifelines==0.26.4
 matplotlib==3.8.0
 matplotlib-venn==1.1.1
